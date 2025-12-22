@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>이미지 수정 & WEBP 변환 도구</title>
-    <!-- ffmpeg.wasm CDN -->
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js" onerror="console.error('FFmpeg 스크립트 로드 실패')"></script>
-    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js" onerror="console.error('FFmpeg util 스크립트 로드 실패')"></script>
+    <!-- ffmpeg.wasm CDN (단일 UMD 번들) -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js" onerror="console.error('FFmpeg 스크립트 로드 실패')"></script>
     <script>
         // FFmpeg 로드 확인
         window.addEventListener('load', function() {
