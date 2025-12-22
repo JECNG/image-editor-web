@@ -876,6 +876,31 @@
             document.getElementById('imagePreviewSection').style.display = imageFiles.length > 0 ? 'block' : 'none';
         }
 
+        const REMOVE_BG_API_URL = 'http://localhost:5001/api/remove_bg';
+
+        async function removeBackgroundViaApi(file, width, height) {
+            if (!REMOVE_BG_API_URL) {
+                throw new Error('REMOVE_BG_API_URL이 설정되지 않았습니다.');
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('width', String(width));
+            formData.append('height', String(height));
+
+            const response = await fetch(REMOVE_BG_API_URL, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`백엔드 오류 (${response.status}): ${text}`);
+            }
+
+            return await response.blob(); // PNG with alpha
+        }
+
         async function processImages() {
             if (imageFiles.length === 0) {
                 showImageMessage('이미지를 선택해주세요.', 'error');
@@ -1194,67 +1219,88 @@
 
         async function processImage(file, width, height, removeBg, format) {
             return new Promise(async (resolve, reject) => {
-                const img = new Image();
-                img.onload = async () => {
-                    try {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        
-                        const scale = Math.min(width / img.width, height / img.height);
-                        const newWidth = img.width * scale;
-                        const newHeight = img.height * scale;
-                        const x = (width - newWidth) / 2;
-                        const y = (height - newHeight) / 2;
-                        
-                        if (removeBg) {
-                            // 배경 제거 모드: 투명 배경
-                            ctx.clearRect(0, 0, width, height);
-                            removeBackground(canvas, ctx, img, x, y, newWidth, newHeight);
-                        } else {
-                            // 일반 모드: 흰색 배경
-                            ctx.fillStyle = '#FFFFFF';
-                            ctx.fillRect(0, 0, width, height);
-                            ctx.drawImage(img, x, y, newWidth, newHeight);
+                try {
+                    // 1) rembg/u2net 백엔드 우선 시도
+                    let sourceBlob = null;
+                    let sourceFile = file;
+
+                    if (removeBg) {
+                        try {
+                            sourceBlob = await removeBackgroundViaApi(file, width, height);
+                            sourceFile = new File(
+                                [sourceBlob],
+                                file.name.replace(/\.[^/.]+$/, '') + '_nobg.png',
+                                { type: 'image/png' }
+                            );
+                        } catch (err) {
+                            console.warn('백엔드 배경제거 실패, 프론트엔드 알고리즘으로 폴백:', err);
                         }
-                        
-                        // JPEG는 투명도를 지원하지 않으므로 PNG로 변환
-                        let outputFormat = format;
-                        let mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
-                        
-                        if (removeBg && (format === 'jpg' || format === 'jpeg')) {
-                            outputFormat = 'png';
-                            mimeType = 'image/png';
-                        }
-                        
-                        const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg' || outputFormat === 'webp') ? 0.95 : undefined;
-                        
-                        canvas.toBlob((blob) => {
-                            if (!blob) {
-                                reject(new Error('이미지 변환 실패'));
-                                return;
+                    }
+
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            
+                            const scale = Math.min(width / img.width, height / img.height);
+                            const newWidth = img.width * scale;
+                            const newHeight = img.height * scale;
+                            const x = (width - newWidth) / 2;
+                            const y = (height - newHeight) / 2;
+                            
+                            if (removeBg && !sourceBlob) {
+                                // 백엔드 사용 실패 시, 기존 캔버스 기반 배경제거
+                                ctx.clearRect(0, 0, width, height);
+                                removeBackground(canvas, ctx, img, x, y, newWidth, newHeight);
+                            } else {
+                                // 일반 모드 또는 백엔드 결과 사용
+                                ctx.fillStyle = '#FFFFFF';
+                                ctx.fillRect(0, 0, width, height);
+                                ctx.drawImage(img, x, y, newWidth, newHeight);
                             }
                             
-                            const processedFile = new File(
-                                [blob],
-                                file.name.replace(/\.[^/.]+$/, '') + '_edited.' + outputFormat,
-                                { type: mimeType }
-                            );
+                            // JPEG는 투명도를 지원하지 않으므로 PNG로 변환
+                            let outputFormat = format;
+                            let mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
                             
-                            resolve({
-                                original: file.name,
-                                processed: processedFile,
-                                url: URL.createObjectURL(blob)
-                            });
-                        }, mimeType, quality);
-                    } catch (error) {
-                        reject(error);
-                    }
-                };
-                
-                img.onerror = () => reject(new Error('이미지 로드 실패'));
-                img.src = URL.createObjectURL(file);
+                            if (removeBg && (format === 'jpg' || format === 'jpeg')) {
+                                outputFormat = 'png';
+                                mimeType = 'image/png';
+                            }
+                            
+                            const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg' || outputFormat === 'webp') ? 0.95 : undefined;
+                            
+                            canvas.toBlob((blob) => {
+                                if (!blob) {
+                                    reject(new Error('이미지 변환 실패'));
+                                    return;
+                                }
+                                
+                                const processedFile = new File(
+                                    [blob],
+                                    file.name.replace(/\.[^/.]+$/, '') + '_edited.' + outputFormat,
+                                    { type: mimeType }
+                                );
+                                
+                                resolve({
+                                    original: file.name,
+                                    processed: processedFile,
+                                    url: URL.createObjectURL(blob)
+                                });
+                            }, mimeType, quality);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+                    
+                    img.onerror = () => reject(new Error('이미지 로드 실패'));
+                    img.src = URL.createObjectURL(sourceFile);
+                } catch (outer) {
+                    reject(outer);
+                }
             });
         }
 
