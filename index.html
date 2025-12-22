@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>이미지 수정 도구 - 고급</title>
+    <title>이미지 수정 & WEBP 변환 도구</title>
+    <!-- ffmpeg.wasm CDN -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js"></script>
     <style>
         * {
             margin: 0;
@@ -45,10 +48,53 @@
             font-size: 1.2em;
         }
 
-        .content {
-            padding: 40px;
+        /* 탭 스타일 */
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 3px solid #e0e0e0;
         }
 
+        .tab-button {
+            flex: 1;
+            padding: 20px 30px;
+            background: transparent;
+            border: none;
+            font-size: 1.3em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #666;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab-button:hover {
+            background: #e8ebff;
+            color: #667eea;
+        }
+
+        .tab-button.active {
+            background: white;
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 40px;
+            animation: fadeIn 0.3s;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 공통 스타일 */
         .upload-section {
             border: 3px dashed #667eea;
             border-radius: 15px;
@@ -83,11 +129,6 @@
             color: #667eea;
             margin-bottom: 25px;
             font-weight: 600;
-        }
-
-        .file-input-wrapper {
-            position: relative;
-            display: inline-block;
         }
 
         .file-input {
@@ -167,7 +208,7 @@
             gap: 12px;
         }
 
-        input[type="number"], input[type="text"] {
+        input[type="number"], input[type="text"], input[type="time"] {
             padding: 12px 18px;
             border: 2px solid #e0e0e0;
             border-radius: 10px;
@@ -177,7 +218,7 @@
             font-weight: 600;
         }
 
-        input[type="number"]:focus, input[type="text"]:focus {
+        input[type="number"]:focus, input[type="text"]:focus, input[type="time"]:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
@@ -265,7 +306,7 @@
             box-shadow: 0 12px 30px rgba(0,0,0,0.15);
         }
 
-        .preview-item img {
+        .preview-item img, .preview-item video {
             width: 100%;
             height: auto;
             border-radius: 10px;
@@ -385,26 +426,138 @@
             font-weight: 600;
             font-size: 1.1em;
         }
+
+        /* 워터마크 위치 그리드 */
+        .position-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            max-width: 300px;
+        }
+
+        .position-btn {
+            padding: 15px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1.5em;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .position-btn:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .position-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* 워터마크 미리보기 */
+        .watermark-preview {
+            width: 100%;
+            height: 100px;
+            background: #222;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 슬라이더 */
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .slider {
+            flex: 1;
+            height: 8px;
+            border-radius: 5px;
+            background: #e0e0e0;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+
+        .slider-value {
+            min-width: 60px;
+            text-align: center;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        /* 2열 레이아웃 */
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🖼️ 이미지 수정 도구</h1>
-            <p>이미지 크기 조정 및 배경 제거</p>
+            <h1>🖼️ 이미지 수정 & WEBP 변환 도구</h1>
+            <p>이미지 수정 및 MP4 → WEBP 변환을 한 곳에서</p>
         </div>
 
-        <div class="content">
+        <!-- 탭 메뉴 -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('image')">
+                🖼️ 이미지 수정
+            </button>
+            <button class="tab-button" onclick="switchTab('webp')">
+                🎬 WEBP 변환
+            </button>
+        </div>
+
+        <!-- 이미지 수정 탭 -->
+        <div id="imageTab" class="tab-content active">
             <!-- 파일 업로드 섹션 -->
-            <div class="upload-section" id="uploadSection" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-section" id="imageUploadSection" onclick="document.getElementById('imageFileInput').click()">
                 <div class="upload-icon">📁</div>
                 <div class="upload-text">
                     이미지를 드래그하거나 클릭하여 선택하세요
                 </div>
-                <div class="file-input-wrapper">
-                    <input type="file" id="fileInput" class="file-input" multiple accept="image/*">
-                </div>
-                <div class="file-count" id="fileCount" style="display: none;"></div>
+                <input type="file" id="imageFileInput" class="file-input" multiple accept="image/*">
+                <div class="file-count" id="imageFileCount" style="display: none;"></div>
             </div>
 
             <!-- 설정 패널 -->
@@ -412,9 +565,9 @@
                 <div class="settings-row">
                     <label>📐 출력 해상도:</label>
                     <div class="input-group">
-                        <input type="number" id="widthInput" value="600" min="1" max="4000">
+                        <input type="number" id="imageWidthInput" value="600" min="1" max="4000">
                         <span style="font-weight: 700; font-size: 1.2em;">×</span>
-                        <input type="number" id="heightInput" value="600" min="1" max="4000">
+                        <input type="number" id="imageHeightInput" value="600" min="1" max="4000">
                         <span style="color: #667eea; font-weight: 600;">px</span>
                     </div>
                 </div>
@@ -431,19 +584,19 @@
                     <label>💾 저장 형식:</label>
                     <div class="format-selector">
                         <div class="format-option">
-                            <input type="radio" name="format" id="formatJPG" value="jpg" checked>
+                            <input type="radio" name="imageFormat" id="formatJPG" value="jpg" checked>
                             <label for="formatJPG">JPG</label>
                         </div>
                         <div class="format-option">
-                            <input type="radio" name="format" id="formatPNG" value="png">
+                            <input type="radio" name="imageFormat" id="formatPNG" value="png">
                             <label for="formatPNG">PNG</label>
                         </div>
                         <div class="format-option">
-                            <input type="radio" name="format" id="formatWEBP" value="webp">
+                            <input type="radio" name="imageFormat" id="formatWEBP" value="webp">
                             <label for="formatWEBP">WEBP</label>
                         </div>
                         <div class="format-option">
-                            <input type="radio" name="format" id="formatGIF" value="gif">
+                            <input type="radio" name="imageFormat" id="formatGIF" value="gif">
                             <label for="formatGIF">GIF</label>
                         </div>
                     </div>
@@ -451,25 +604,168 @@
             </div>
 
             <!-- 진행률 바 -->
-            <div class="progress-bar-container" id="progressContainer">
-                <div class="progress-bar" id="progressBar">0%</div>
+            <div class="progress-bar-container" id="imageProgressContainer">
+                <div class="progress-bar" id="imageProgressBar">0%</div>
             </div>
 
             <!-- 메시지 영역 -->
-            <div id="messageArea"></div>
+            <div id="imageMessageArea"></div>
 
             <!-- 미리보기 섹션 -->
-            <div class="preview-section" id="previewSection" style="display: none;">
+            <div class="preview-section" id="imagePreviewSection" style="display: none;">
                 <h2 style="margin-bottom: 25px; color: #333; font-size: 1.8em;">선택된 이미지</h2>
-                <div class="preview-container" id="previewContainer"></div>
+                <div class="preview-container" id="imagePreviewContainer"></div>
             </div>
 
             <!-- 액션 버튼 -->
             <div class="action-buttons">
-                <button class="btn" id="processBtn" onclick="processImages()" disabled>
+                <button class="btn" id="imageProcessBtn" onclick="processImages()" disabled>
                     ✨ 이미지 수정 시작
                 </button>
-                <button class="btn btn-danger" id="clearBtn" onclick="clearAll()" style="display: none;">
+                <button class="btn btn-danger" id="imageClearBtn" onclick="clearImageAll()" style="display: none;">
+                    🗑️ 모두 지우기
+                </button>
+            </div>
+        </div>
+
+        <!-- WEBP 변환 탭 -->
+        <div id="webpTab" class="tab-content">
+            <div class="two-column">
+                <!-- 왼쪽: 워터마크 설정 -->
+                <div>
+                    <div class="settings-panel">
+                        <h3 style="margin-bottom: 20px; color: #667eea;">워터마크 설정</h3>
+                        
+                        <div class="settings-row">
+                            <label>텍스트:</label>
+                            <input type="text" id="watermarkText" value="luxmixlounge.com" style="flex: 1;">
+                        </div>
+
+                        <div class="settings-row">
+                            <label>색상:</label>
+                            <input type="color" id="watermarkColor" value="#FFFFFF" style="width: 80px; height: 40px; border: 2px solid #e0e0e0; border-radius: 10px; cursor: pointer;">
+                        </div>
+
+                        <div class="settings-row">
+                            <label>크기:</label>
+                            <div class="slider-container">
+                                <input type="range" id="fontSizeSlider" class="slider" min="10" max="100" value="24">
+                                <span class="slider-value" id="fontSizeValue">24</span>
+                            </div>
+                        </div>
+
+                        <div class="settings-row">
+                            <label>투명도:</label>
+                            <div class="slider-container">
+                                <input type="range" id="opacitySlider" class="slider" min="0" max="100" value="50" step="10">
+                                <span class="slider-value" id="opacityValue">50%</span>
+                            </div>
+                        </div>
+
+                        <div class="settings-row">
+                            <label>위치:</label>
+                            <div class="position-grid">
+                                <div class="position-btn" data-pos="top-left" onclick="selectPosition('top-left')">↖</div>
+                                <div class="position-btn" data-pos="top-center" onclick="selectPosition('top-center')">↑</div>
+                                <div class="position-btn" data-pos="top-right" onclick="selectPosition('top-right')">↗</div>
+                                <div class="position-btn" data-pos="mid-left" onclick="selectPosition('mid-left')">←</div>
+                                <div class="position-btn active" data-pos="mid-center" onclick="selectPosition('mid-center')">●</div>
+                                <div class="position-btn" data-pos="mid-right" onclick="selectPosition('mid-right')">→</div>
+                                <div class="position-btn" data-pos="bot-left" onclick="selectPosition('bot-left')">↙</div>
+                                <div class="position-btn" data-pos="bot-center" onclick="selectPosition('bot-center')">↓</div>
+                                <div class="position-btn" data-pos="bot-right" onclick="selectPosition('bot-right')">↘</div>
+                            </div>
+                        </div>
+
+                        <div class="watermark-preview" id="watermarkPreview">
+                            <span id="watermarkPreviewText">luxmixlounge.com</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 오른쪽: 영상 설정 -->
+                <div>
+                    <div class="settings-panel">
+                        <h3 style="margin-bottom: 20px; color: #667eea;">영상 설정</h3>
+                        
+                        <div class="settings-row">
+                            <label>영상 길이:</label>
+                            <div class="format-selector">
+                                <div class="format-option">
+                                    <input type="radio" name="videoLength" id="fullVideo" value="full" checked>
+                                    <label for="fullVideo">전체 영상</label>
+                                </div>
+                                <div class="format-option">
+                                    <input type="radio" name="videoLength" id="partialVideo" value="partial">
+                                    <label for="partialVideo">영상 일부</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-row" id="timeRangeRow" style="display: none;">
+                            <label>구간 설정:</label>
+                            <div class="input-group">
+                                <input type="text" id="startTime" value="00:00:00" placeholder="00:00:00" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}">
+                                <span style="font-weight: 700;">~</span>
+                                <input type="text" id="endTime" value="00:00:05" placeholder="00:00:05" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}">
+                            </div>
+                        </div>
+
+                        <div class="settings-row">
+                            <label>가로 크기:</label>
+                            <div class="input-group">
+                                <input type="number" id="videoWidth" value="600" min="100" max="4000">
+                                <span style="color: #667eea; font-weight: 600;">px</span>
+                            </div>
+                        </div>
+
+                        <div class="settings-row">
+                            <label>출력 형식:</label>
+                            <div class="format-selector">
+                                <div class="format-option">
+                                    <input type="radio" name="webpFormat" id="formatWEBP" value="webp" checked>
+                                    <label for="formatWEBP">WEBP</label>
+                                </div>
+                                <div class="format-option">
+                                    <input type="radio" name="webpFormat" id="formatGIF" value="gif">
+                                    <label for="formatGIF">GIF</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 파일 업로드 섹션 -->
+            <div class="upload-section" id="webpUploadSection" onclick="document.getElementById('webpFileInput').click()">
+                <div class="upload-icon">🎬</div>
+                <div class="upload-text">
+                    MP4 파일을 드래그하거나 클릭하여 선택하세요
+                </div>
+                <input type="file" id="webpFileInput" class="file-input" multiple accept="video/mp4">
+                <div class="file-count" id="webpFileCount" style="display: none;"></div>
+            </div>
+
+            <!-- 진행률 바 -->
+            <div class="progress-bar-container" id="webpProgressContainer">
+                <div class="progress-bar" id="webpProgressBar">0%</div>
+            </div>
+
+            <!-- 메시지 영역 -->
+            <div id="webpMessageArea"></div>
+
+            <!-- 미리보기 섹션 -->
+            <div class="preview-section" id="webpPreviewSection" style="display: none;">
+                <h2 style="margin-bottom: 25px; color: #333; font-size: 1.8em;">선택된 영상</h2>
+                <div class="preview-container" id="webpPreviewContainer"></div>
+            </div>
+
+            <!-- 액션 버튼 -->
+            <div class="action-buttons">
+                <button class="btn" id="webpProcessBtn" onclick="processWebp()" disabled>
+                    ✨ WEBP 변환 시작
+                </button>
+                <button class="btn btn-danger" id="webpClearBtn" onclick="clearWebpAll()" style="display: none;">
                     🗑️ 모두 지우기
                 </button>
             </div>
@@ -477,61 +773,73 @@
     </div>
 
     <script>
-        let selectedFiles = [];
+        // ========== 탭 전환 ==========
+        function switchTab(tab) {
+            // 탭 버튼 활성화
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            if (tab === 'image') {
+                document.querySelector('.tab-button:first-child').classList.add('active');
+                document.getElementById('imageTab').classList.add('active');
+            } else if (tab === 'webp') {
+                document.querySelector('.tab-button:last-child').classList.add('active');
+                document.getElementById('webpTab').classList.add('active');
+            }
+        }
+
+        // ========== 이미지 처리 ==========
+        let imageFiles = [];
         let processedImages = [];
 
-        // 파일 선택 이벤트
-        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
-        
-        // 드래그 앤 드롭
-        const uploadSection = document.getElementById('uploadSection');
-        uploadSection.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadSection.classList.add('dragover');
-        });
-        
-        uploadSection.addEventListener('dragleave', () => {
-            uploadSection.classList.remove('dragover');
-        });
-        
-        uploadSection.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadSection.classList.remove('dragover');
-            handleFiles(e.dataTransfer.files);
+        // 이미지 파일 선택
+        document.getElementById('imageFileInput').addEventListener('change', (e) => {
+            handleImageFiles(e.target.files);
         });
 
-        function handleFileSelect(e) {
-            handleFiles(e.target.files);
+        // 이미지 드래그 앤 드롭
+        const imageUploadSection = document.getElementById('imageUploadSection');
+        imageUploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            imageUploadSection.classList.add('dragover');
+        });
+        imageUploadSection.addEventListener('dragleave', () => {
+            imageUploadSection.classList.remove('dragover');
+        });
+        imageUploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            imageUploadSection.classList.remove('dragover');
+            handleImageFiles(e.dataTransfer.files);
+        });
+
+        function handleImageFiles(files) {
+            imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+            updateImageFileCount();
+            updateImagePreview();
+            document.getElementById('imageProcessBtn').disabled = imageFiles.length === 0;
+            document.getElementById('imageClearBtn').style.display = imageFiles.length > 0 ? 'inline-block' : 'none';
         }
 
-        function handleFiles(files) {
-            selectedFiles = Array.from(files);
-            updateFileCount();
-            updatePreview();
-            document.getElementById('processBtn').disabled = selectedFiles.length === 0;
-            document.getElementById('clearBtn').style.display = selectedFiles.length > 0 ? 'inline-block' : 'none';
-        }
-
-        function updateFileCount() {
-            const countEl = document.getElementById('fileCount');
-            if (selectedFiles.length > 0) {
-                countEl.textContent = `선택된 파일: ${selectedFiles.length}개`;
+        function updateImageFileCount() {
+            const countEl = document.getElementById('imageFileCount');
+            if (imageFiles.length > 0) {
+                countEl.textContent = `선택된 파일: ${imageFiles.length}개`;
                 countEl.style.display = 'block';
             } else {
                 countEl.style.display = 'none';
             }
         }
 
-        function updatePreview() {
-            const container = document.getElementById('previewContainer');
+        function updateImagePreview() {
+            const container = document.getElementById('imagePreviewContainer');
             container.innerHTML = '';
             
-            selectedFiles.forEach((file, index) => {
+            imageFiles.forEach((file, index) => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const div = document.createElement('div');
                     div.className = 'preview-item';
-                    div.id = `preview-${index}`;
+                    div.id = `imagePreview-${index}`;
                     div.innerHTML = `
                         <img src="${e.target.result}" alt="${file.name}">
                         <div class="filename">${file.name}</div>
@@ -542,98 +850,149 @@
                 reader.readAsDataURL(file);
             });
             
-            document.getElementById('previewSection').style.display = selectedFiles.length > 0 ? 'block' : 'none';
-        }
-
-        function showMessage(message, type = 'success') {
-            const messageArea = document.getElementById('messageArea');
-            const messageClass = type === 'error' ? 'error-message' : 
-                                 type === 'info' ? 'info-message' : 'success-message';
-            messageArea.innerHTML = `<div class="message ${messageClass}">${message}</div>`;
-            setTimeout(() => {
-                messageArea.innerHTML = '';
-            }, 5000);
-        }
-
-        function updateProgress(percent) {
-            const progressContainer = document.getElementById('progressContainer');
-            const progressBar = document.getElementById('progressBar');
-            
-            if (percent > 0) {
-                progressContainer.style.display = 'block';
-                progressBar.style.width = percent + '%';
-                progressBar.textContent = Math.round(percent) + '%';
-            } else {
-                progressContainer.style.display = 'none';
-            }
-        }
-
-        function updatePreviewStatus(index, status, className) {
-            const previewItem = document.getElementById(`preview-${index}`);
-            if (previewItem) {
-                const statusEl = previewItem.querySelector('.status');
-                statusEl.textContent = status;
-                statusEl.className = 'status ' + className;
-            }
+            document.getElementById('imagePreviewSection').style.display = imageFiles.length > 0 ? 'block' : 'none';
         }
 
         async function processImages() {
-            if (selectedFiles.length === 0) {
-                showMessage('이미지를 선택해주세요.', 'error');
+            if (imageFiles.length === 0) {
+                showImageMessage('이미지를 선택해주세요.', 'error');
                 return;
             }
 
-            const width = parseInt(document.getElementById('widthInput').value);
-            const height = parseInt(document.getElementById('heightInput').value);
+            const width = parseInt(document.getElementById('imageWidthInput').value);
+            const height = parseInt(document.getElementById('imageHeightInput').value);
             const removeBg = document.getElementById('bgRemovalCheck').checked;
-            const format = document.querySelector('input[name="format"]:checked').value;
+            const format = document.querySelector('input[name="imageFormat"]:checked').value;
 
             if (width < 1 || height < 1) {
-                showMessage('해상도를 올바르게 입력해주세요.', 'error');
+                showImageMessage('해상도를 올바르게 입력해주세요.', 'error');
                 return;
             }
 
-            document.getElementById('processBtn').disabled = true;
+            document.getElementById('imageProcessBtn').disabled = true;
             processedImages = [];
-            updateProgress(0);
+            updateImageProgress(0);
 
             try {
-                for (let i = 0; i < selectedFiles.length; i++) {
-                    const file = selectedFiles[i];
-                    const progress = ((i + 1) / selectedFiles.length) * 100;
-                    updateProgress(progress);
-                    updatePreviewStatus(i, '처리 중...', 'processing');
+                for (let i = 0; i < imageFiles.length; i++) {
+                    const file = imageFiles[i];
+                    const progress = ((i + 1) / imageFiles.length) * 100;
+                    updateImageProgress(progress);
+                    updateImagePreviewStatus(i, '처리 중...', 'processing');
                     
                     try {
                         const processed = await processImage(file, width, height, removeBg, format);
                         processedImages.push(processed);
-                        updatePreviewStatus(i, '완료 ✓', 'complete');
+                        updateImagePreviewStatus(i, '완료 ✓', 'complete');
                     } catch (error) {
-                        updatePreviewStatus(i, '오류 ✗', 'error');
-                        showMessage(`${file.name} 처리 실패: ${error.message}`, 'error');
+                        updateImagePreviewStatus(i, '오류 ✗', 'error');
+                        showImageMessage(`${file.name} 처리 실패: ${error.message}`, 'error');
                     }
                 }
 
-                updateProgress(100);
-                showMessage(`모든 이미지 처리가 완료되었습니다! (${processedImages.length}개)`, 'success');
+                updateImageProgress(100);
+                showImageMessage(`모든 이미지 처리가 완료되었습니다! (${processedImages.length}개)`, 'success');
                 
                 // 다운로드 버튼 표시
-                const actionButtons = document.querySelector('.action-buttons');
-                const existingDownloadBtn = document.getElementById('downloadAllBtn');
+                const actionButtons = document.querySelector('#imageTab .action-buttons');
+                const existingDownloadBtn = document.getElementById('imageDownloadAllBtn');
                 if (processedImages.length > 0 && !existingDownloadBtn) {
                     const downloadBtn = document.createElement('button');
-                    downloadBtn.id = 'downloadAllBtn';
+                    downloadBtn.id = 'imageDownloadAllBtn';
                     downloadBtn.className = 'btn btn-success';
                     downloadBtn.textContent = '📥 모두 다운로드';
-                    downloadBtn.onclick = downloadAll;
+                    downloadBtn.onclick = downloadAllImages;
                     actionButtons.appendChild(downloadBtn);
                 }
                 
             } catch (error) {
-                showMessage('처리 중 오류가 발생했습니다: ' + error.message, 'error');
+                showImageMessage('처리 중 오류가 발생했습니다: ' + error.message, 'error');
             } finally {
-                document.getElementById('processBtn').disabled = false;
+                document.getElementById('imageProcessBtn').disabled = false;
             }
+        }
+
+        // 배경 제거 함수 (간단한 알고리즘)
+        function removeBackground(canvas, ctx, img, x, y, imgWidth, imgHeight) {
+            // 원본 이미지를 임시 캔버스에 그리기
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = img.width;
+            tempCanvas.height = img.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(img, 0, 0);
+            
+            const imageData = tempCtx.getImageData(0, 0, img.width, img.height);
+            const data = imageData.data;
+            
+            // 가장자리 색상 샘플링 (배경색 추정)
+            const edgeSamples = [];
+            const sampleSize = Math.min(10, Math.floor(img.width / 20));
+            
+            // 상단 가장자리
+            for (let i = 0; i < sampleSize; i++) {
+                const px = Math.floor((i / sampleSize) * img.width);
+                const idx = (px + 0) * 4;
+                edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+            }
+            
+            // 하단 가장자리
+            for (let i = 0; i < sampleSize; i++) {
+                const px = Math.floor((i / sampleSize) * img.width);
+                const idx = (px + (img.height - 1) * img.width) * 4;
+                edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+            }
+            
+            // 좌측 가장자리
+            for (let i = 0; i < sampleSize; i++) {
+                const py = Math.floor((i / sampleSize) * img.height);
+                const idx = (0 + py * img.width) * 4;
+                edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+            }
+            
+            // 우측 가장자리
+            for (let i = 0; i < sampleSize; i++) {
+                const py = Math.floor((i / sampleSize) * img.height);
+                const idx = ((img.width - 1) + py * img.width) * 4;
+                edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+            }
+            
+            // 평균 배경색 계산
+            let avgR = 0, avgG = 0, avgB = 0;
+            edgeSamples.forEach(sample => {
+                avgR += sample[0];
+                avgG += sample[1];
+                avgB += sample[2];
+            });
+            avgR = Math.floor(avgR / edgeSamples.length);
+            avgG = Math.floor(avgG / edgeSamples.length);
+            avgB = Math.floor(avgB / edgeSamples.length);
+            
+            // 배경 제거 (유사한 색상을 투명하게)
+            const threshold = 40; // 색상 차이 임계값
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                
+                // 배경색과의 거리 계산
+                const distance = Math.sqrt(
+                    Math.pow(r - avgR, 2) + 
+                    Math.pow(g - avgG, 2) + 
+                    Math.pow(b - avgB, 2)
+                );
+                
+                // 임계값보다 작으면 투명하게
+                if (distance < threshold) {
+                    data[i + 3] = 0; // 알파값을 0으로
+                }
+            }
+            
+            // 처리된 이미지 데이터를 다시 캔버스에 적용
+            tempCtx.putImageData(imageData, 0, 0);
+            
+            // 최종 캔버스에 투명 배경으로 그리기
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(tempCanvas, x, y, imgWidth, imgHeight);
         }
 
         async function processImage(file, width, height, removeBg, format) {
@@ -646,29 +1005,33 @@
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
                         
-                        // 흰색 배경
-                        ctx.fillStyle = '#FFFFFF';
-                        ctx.fillRect(0, 0, width, height);
-                        
-                        // 이미지 크기 계산 (비율 유지)
                         const scale = Math.min(width / img.width, height / img.height);
                         const newWidth = img.width * scale;
                         const newHeight = img.height * scale;
                         const x = (width - newWidth) / 2;
                         const y = (height - newHeight) / 2;
                         
-                        // 배경 제거 (간단한 방법)
                         if (removeBg) {
-                            // 실제 배경 제거는 서버가 필요하므로 여기서는 크기 조정만
-                            // 나중에 API를 추가할 수 있도록 구조 유지
-                            ctx.drawImage(img, x, y, newWidth, newHeight);
+                            // 배경 제거 모드: 투명 배경
+                            ctx.clearRect(0, 0, width, height);
+                            removeBackground(canvas, ctx, img, x, y, newWidth, newHeight);
                         } else {
+                            // 일반 모드: 흰색 배경
+                            ctx.fillStyle = '#FFFFFF';
+                            ctx.fillRect(0, 0, width, height);
                             ctx.drawImage(img, x, y, newWidth, newHeight);
                         }
                         
-                        // 형식에 맞게 변환
-                        const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
-                        const quality = format === 'jpg' || format === 'webp' ? 0.95 : undefined;
+                        // JPEG는 투명도를 지원하지 않으므로 PNG로 변환
+                        let outputFormat = format;
+                        let mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
+                        
+                        if (removeBg && (format === 'jpg' || format === 'jpeg')) {
+                            outputFormat = 'png';
+                            mimeType = 'image/png';
+                        }
+                        
+                        const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg' || outputFormat === 'webp') ? 0.95 : undefined;
                         
                         canvas.toBlob((blob) => {
                             if (!blob) {
@@ -678,7 +1041,7 @@
                             
                             const processedFile = new File(
                                 [blob],
-                                file.name.replace(/\.[^/.]+$/, '') + '_edited.' + format,
+                                file.name.replace(/\.[^/.]+$/, '') + '_edited.' + outputFormat,
                                 { type: mimeType }
                             );
                             
@@ -698,9 +1061,9 @@
             });
         }
 
-        function downloadAll() {
+        function downloadAllImages() {
             if (processedImages.length === 0) {
-                showMessage('다운로드할 이미지가 없습니다.', 'error');
+                showImageMessage('다운로드할 이미지가 없습니다.', 'error');
                 return;
             }
             
@@ -715,26 +1078,416 @@
                 }, index * 200);
             });
             
-            showMessage(`${processedImages.length}개 파일 다운로드 시작`, 'info');
+            showImageMessage(`${processedImages.length}개 파일 다운로드 시작`, 'info');
         }
 
-        function clearAll() {
-            selectedFiles = [];
+        function clearImageAll() {
+            imageFiles = [];
             processedImages = [];
-            document.getElementById('previewContainer').innerHTML = '';
-            document.getElementById('previewSection').style.display = 'none';
-            document.getElementById('fileInput').value = '';
-            document.getElementById('processBtn').disabled = true;
-            document.getElementById('clearBtn').style.display = 'none';
-            updateProgress(0);
-            updateFileCount();
+            document.getElementById('imagePreviewContainer').innerHTML = '';
+            document.getElementById('imagePreviewSection').style.display = 'none';
+            document.getElementById('imageFileInput').value = '';
+            document.getElementById('imageProcessBtn').disabled = true;
+            document.getElementById('imageClearBtn').style.display = 'none';
+            updateImageProgress(0);
+            updateImageFileCount();
             
-            // 다운로드 버튼 제거
-            const downloadBtn = document.getElementById('downloadAllBtn');
-            if (downloadBtn) {
-                downloadBtn.remove();
+            const downloadBtn = document.getElementById('imageDownloadAllBtn');
+            if (downloadBtn) downloadBtn.remove();
+        }
+
+        function updateImageProgress(percent) {
+            const container = document.getElementById('imageProgressContainer');
+            const bar = document.getElementById('imageProgressBar');
+            if (percent > 0) {
+                container.style.display = 'block';
+                bar.style.width = percent + '%';
+                bar.textContent = Math.round(percent) + '%';
+            } else {
+                container.style.display = 'none';
             }
         }
+
+        function updateImagePreviewStatus(index, status, className) {
+            const item = document.getElementById(`imagePreview-${index}`);
+            if (item) {
+                const statusEl = item.querySelector('.status');
+                statusEl.textContent = status;
+                statusEl.className = 'status ' + className;
+            }
+        }
+
+        function showImageMessage(message, type = 'success') {
+            const area = document.getElementById('imageMessageArea');
+            const messageClass = type === 'error' ? 'error-message' : 
+                                 type === 'info' ? 'info-message' : 'success-message';
+            area.innerHTML = `<div class="message ${messageClass}">${message}</div>`;
+            setTimeout(() => { area.innerHTML = ''; }, 5000);
+        }
+
+        // ========== WEBP 변환 처리 ==========
+        let webpFiles = [];
+        let processedWebp = [];
+        let currentWatermarkPosition = 'mid-center';
+
+        // 영상 파일 선택
+        document.getElementById('webpFileInput').addEventListener('change', (e) => {
+            handleWebpFiles(e.target.files);
+        });
+
+        // 영상 드래그 앤 드롭
+        const webpUploadSection = document.getElementById('webpUploadSection');
+        webpUploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            webpUploadSection.classList.add('dragover');
+        });
+        webpUploadSection.addEventListener('dragleave', () => {
+            webpUploadSection.classList.remove('dragover');
+        });
+        webpUploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            webpUploadSection.classList.remove('dragover');
+            handleWebpFiles(e.dataTransfer.files);
+        });
+
+        function handleWebpFiles(files) {
+            webpFiles = Array.from(files).filter(f => f.type.startsWith('video/'));
+            updateWebpFileCount();
+            updateWebpPreview();
+            document.getElementById('webpProcessBtn').disabled = webpFiles.length === 0;
+            document.getElementById('webpClearBtn').style.display = webpFiles.length > 0 ? 'inline-block' : 'none';
+        }
+
+        function updateWebpFileCount() {
+            const countEl = document.getElementById('webpFileCount');
+            if (webpFiles.length > 0) {
+                countEl.textContent = `선택된 파일: ${webpFiles.length}개`;
+                countEl.style.display = 'block';
+            } else {
+                countEl.style.display = 'none';
+            }
+        }
+
+        function updateWebpPreview() {
+            const container = document.getElementById('webpPreviewContainer');
+            container.innerHTML = '';
+            
+            webpFiles.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const div = document.createElement('div');
+                    div.className = 'preview-item';
+                    div.id = `webpPreview-${index}`;
+                    div.innerHTML = `
+                        <video src="${e.target.result}" controls style="max-height: 200px;"></video>
+                        <div class="filename">${file.name}</div>
+                        <div class="status">대기 중</div>
+                    `;
+                    container.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            });
+            
+            document.getElementById('webpPreviewSection').style.display = webpFiles.length > 0 ? 'block' : 'none';
+        }
+
+        // 워터마크 설정 업데이트
+        document.getElementById('watermarkText').addEventListener('input', updateWatermarkPreview);
+        document.getElementById('watermarkColor').addEventListener('input', updateWatermarkPreview);
+        document.getElementById('fontSizeSlider').addEventListener('input', (e) => {
+            document.getElementById('fontSizeValue').textContent = e.target.value;
+            updateWatermarkPreview();
+        });
+        document.getElementById('opacitySlider').addEventListener('input', (e) => {
+            document.getElementById('opacityValue').textContent = e.target.value + '%';
+            updateWatermarkPreview();
+        });
+
+        function updateWatermarkPreview() {
+            const text = document.getElementById('watermarkText').value;
+            const color = document.getElementById('watermarkColor').value;
+            const size = document.getElementById('fontSizeSlider').value;
+            const opacity = document.getElementById('opacitySlider').value / 100;
+            
+            const preview = document.getElementById('watermarkPreview');
+            const previewText = document.getElementById('watermarkPreviewText');
+            previewText.textContent = text;
+            previewText.style.color = color;
+            previewText.style.fontSize = size + 'px';
+            previewText.style.opacity = opacity;
+        }
+
+        function selectPosition(pos) {
+            currentWatermarkPosition = pos;
+            document.querySelectorAll('.position-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.pos === pos) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        // 영상 길이 선택
+        document.querySelectorAll('input[name="videoLength"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                document.getElementById('timeRangeRow').style.display = 
+                    e.target.value === 'partial' ? 'flex' : 'none';
+            });
+        });
+
+        // ffmpeg.wasm 초기화
+        let ffmpeg = null;
+        let ffmpegLoaded = false;
+
+        async function loadFFmpeg() {
+            if (ffmpegLoaded) return;
+            
+            try {
+                showWebpMessage('FFmpeg 로딩 중... (처음 한 번만, 약 30초 소요)', 'info');
+                const { createFFmpeg, fetchFile } = FFmpeg;
+                ffmpeg = createFFmpeg({ 
+                    log: false,
+                    corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js'
+                });
+                
+                await ffmpeg.load();
+                ffmpegLoaded = true;
+                showWebpMessage('✅ FFmpeg 로딩 완료! 이제 변환할 수 있습니다.', 'success');
+            } catch (error) {
+                showWebpMessage('❌ FFmpeg 로딩 실패: ' + error.message, 'error');
+                throw error;
+            }
+        }
+
+        // 시간 문자열을 초로 변환 (HH:MM:SS -> seconds)
+        function timeToSeconds(timeStr) {
+            const parts = timeStr.split(':');
+            return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
+        }
+
+        // 초를 시간 문자열로 변환
+        function secondsToTime(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        async function processWebp() {
+            if (webpFiles.length === 0) {
+                showWebpMessage('MP4 파일을 선택해주세요.', 'error');
+                return;
+            }
+
+            const settings = {
+                watermarkText: document.getElementById('watermarkText').value,
+                watermarkColor: document.getElementById('watermarkColor').value,
+                fontSize: parseInt(document.getElementById('fontSizeSlider').value),
+                opacity: parseFloat(document.getElementById('opacitySlider').value) / 100,
+                position: currentWatermarkPosition,
+                videoLength: document.querySelector('input[name="videoLength"]:checked').value,
+                startTime: document.getElementById('startTime').value,
+                endTime: document.getElementById('endTime').value,
+                width: parseInt(document.getElementById('videoWidth').value),
+                format: document.querySelector('input[name="webpFormat"]:checked').value
+            };
+
+            document.getElementById('webpProcessBtn').disabled = true;
+            processedWebp = [];
+            updateWebpProgress(0);
+
+            try {
+                // FFmpeg 로드
+                await loadFFmpeg();
+                
+                for (let i = 0; i < webpFiles.length; i++) {
+                    const file = webpFiles[i];
+                    const fileProgress = ((i) / webpFiles.length) * 100;
+                    updateWebpProgress(fileProgress);
+                    updateWebpPreviewStatus(i, '처리 중...', 'processing');
+                    
+                    try {
+                        showWebpMessage(`${file.name} 변환 중...`, 'info');
+                        
+                        // 파일을 메모리에 쓰기
+                        const { fetchFile } = FFmpeg;
+                        const inputData = await fetchFile(file);
+                        ffmpeg.FS('writeFile', 'input.mp4', inputData);
+                        
+                        // FFmpeg 명령어 구성
+                        const outputFile = `output.${settings.format}`;
+                        const args = ['-i', 'input.mp4'];
+                        
+                        // 시간 구간 설정
+                        if (settings.videoLength === 'partial') {
+                            const startSeconds = timeToSeconds(settings.startTime);
+                            const endSeconds = timeToSeconds(settings.endTime);
+                            const duration = endSeconds - startSeconds;
+                            args.push('-ss', settings.startTime);
+                            args.push('-t', secondsToTime(duration));
+                        }
+                        
+                        // 비디오 필터 구성
+                        let vf = `scale=${settings.width}:-1`;
+                        
+                        // 워터마크 추가 (간단한 텍스트 오버레이)
+                        if (settings.watermarkText) {
+                            const colorHex = settings.watermarkColor.replace('#', '');
+                            const r = parseInt(colorHex.substr(0, 2), 16);
+                            const g = parseInt(colorHex.substr(2, 2), 16);
+                            const b = parseInt(colorHex.substr(4, 2), 16);
+                            
+                            // 위치 계산
+                            let x = '10', y = '10';
+                            if (settings.position.includes('center')) {
+                                x = '(w-text_w)/2';
+                            } else if (settings.position.includes('right')) {
+                                x = 'w-text_w-10';
+                            }
+                            if (settings.position.includes('mid')) {
+                                y = '(h-text_h)/2';
+                            } else if (settings.position.includes('bot')) {
+                                y = 'h-text_h-10';
+                            }
+                            
+                            const escapedText = settings.watermarkText.replace(/'/g, "\\'");
+                            vf += `,drawtext=text='${escapedText}':fontsize=${settings.fontSize}:fontcolor=${r}:${g}:${b}@${Math.floor(settings.opacity * 255)}:x=${x}:y=${y}`;
+                        }
+                        
+                        args.push('-vf', vf);
+                        
+                        // 출력 형식에 따른 인코더 설정
+                        if (settings.format === 'webp') {
+                            args.push('-c:v', 'libwebp', '-loop', '0', '-quality', '80', '-an', outputFile);
+                        } else if (settings.format === 'gif') {
+                            // GIF는 2단계로 처리 (팔레트 생성 후 변환)
+                            const paletteFile = 'palette.png';
+                            // 1단계: 팔레트 생성
+                            const paletteArgs = ['-i', 'input.mp4'];
+                            if (settings.videoLength === 'partial') {
+                                const startSeconds = timeToSeconds(settings.startTime);
+                                const endSeconds = timeToSeconds(settings.endTime);
+                                const duration = endSeconds - startSeconds;
+                                paletteArgs.push('-ss', settings.startTime);
+                                paletteArgs.push('-t', secondsToTime(duration));
+                            }
+                            paletteArgs.push('-vf', `fps=12,scale=${settings.width}:-1:flags=lanczos,palettegen`, paletteFile);
+                            await ffmpeg.run(...paletteArgs);
+                            
+                            // 2단계: GIF 생성
+                            args = ['-i', 'input.mp4', '-i', paletteFile];
+                            if (settings.videoLength === 'partial') {
+                                const startSeconds = timeToSeconds(settings.startTime);
+                                const endSeconds = timeToSeconds(settings.endTime);
+                                const duration = endSeconds - startSeconds;
+                                args.push('-ss', settings.startTime);
+                                args.push('-t', secondsToTime(duration));
+                            }
+                            args.push('-filter_complex', `[0:v]fps=12,scale=${settings.width}:-1:flags=lanczos[scaled];[scaled][1:v]paletteuse`, outputFile);
+                        }
+                        
+                        if (settings.format !== 'gif') {
+                            args.push(outputFile);
+                        }
+                        
+                        // 변환 실행
+                        await ffmpeg.run(...args);
+                        
+                        // 결과 파일 읽기
+                        const data = ffmpeg.FS('readFile', outputFile);
+                        const blob = new Blob([data.buffer], { 
+                            type: settings.format === 'webp' ? 'image/webp' : 'image/gif' 
+                        });
+                        const url = URL.createObjectURL(blob);
+                        
+                        // 파일 시스템 정리
+                        try {
+                            ffmpeg.FS('unlink', 'input.mp4');
+                            ffmpeg.FS('unlink', outputFile);
+                            if (settings.format === 'gif') {
+                                ffmpeg.FS('unlink', 'palette.png');
+                            }
+                        } catch (e) {}
+                        
+                        updateWebpPreviewStatus(i, '완료 ✓', 'complete');
+                        processedWebp.push({
+                            original: file.name,
+                            processed: new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.' + settings.format, { 
+                                type: blob.type 
+                            }),
+                            url: url
+                        });
+                        
+                        // 자동 다운로드
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.name.replace(/\.[^/.]+$/, '') + '.' + settings.format;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        
+                    } catch (error) {
+                        updateWebpPreviewStatus(i, '오류 ✗', 'error');
+                        showWebpMessage(`${file.name} 변환 실패: ${error.message}`, 'error');
+                        console.error('Conversion error:', error);
+                    }
+                }
+
+                updateWebpProgress(100);
+                if (processedWebp.length > 0) {
+                    showWebpMessage(`✅ ${processedWebp.length}개 파일 변환 완료!`, 'success');
+                }
+                
+            } catch (error) {
+                showWebpMessage('처리 중 오류가 발생했습니다: ' + error.message, 'error');
+            } finally {
+                document.getElementById('webpProcessBtn').disabled = false;
+            }
+        }
+
+        function clearWebpAll() {
+            webpFiles = [];
+            processedWebp = [];
+            document.getElementById('webpPreviewContainer').innerHTML = '';
+            document.getElementById('webpPreviewSection').style.display = 'none';
+            document.getElementById('webpFileInput').value = '';
+            document.getElementById('webpProcessBtn').disabled = true;
+            document.getElementById('webpClearBtn').style.display = 'none';
+            updateWebpProgress(0);
+            updateWebpFileCount();
+        }
+
+        function updateWebpProgress(percent) {
+            const container = document.getElementById('webpProgressContainer');
+            const bar = document.getElementById('webpProgressBar');
+            if (percent > 0) {
+                container.style.display = 'block';
+                bar.style.width = percent + '%';
+                bar.textContent = Math.round(percent) + '%';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        function updateWebpPreviewStatus(index, status, className) {
+            const item = document.getElementById(`webpPreview-${index}`);
+            if (item) {
+                const statusEl = item.querySelector('.status');
+                statusEl.textContent = status;
+                statusEl.className = 'status ' + className;
+            }
+        }
+
+        function showWebpMessage(message, type = 'success') {
+            const area = document.getElementById('webpMessageArea');
+            const messageClass = type === 'error' ? 'error-message' : 
+                                 type === 'info' ? 'info-message' : 'success-message';
+            area.innerHTML = `<div class="message ${messageClass}">${message}</div>`;
+            setTimeout(() => { area.innerHTML = ''; }, 5000);
+        }
+
+        // 초기 워터마크 미리보기 업데이트
+        updateWatermarkPreview();
     </script>
 </body>
 </html>
