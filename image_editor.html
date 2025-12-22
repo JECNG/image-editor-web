@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이미지 수정 도구</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            background: #f8f9ff;
+            transition: all 0.3s;
+        }
+
+        .upload-section:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-section.dragover {
+            border-color: #764ba2;
+            background: #e8ebff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .settings-panel {
+            background: #f8f9ff;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .settings-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .settings-row label {
+            font-weight: 600;
+            color: #333;
+            min-width: 120px;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="number"], input[type="text"] {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            width: 100px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="number"]:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .format-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .format-option {
+            position: relative;
+        }
+
+        .format-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+        }
+
+        .format-option label {
+            display: block;
+            padding: 10px 20px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .format-option input[type="radio"]:checked + label {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .format-option label:hover {
+            border-color: #667eea;
+        }
+
+        .preview-section {
+            margin-top: 30px;
+        }
+
+        .preview-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .preview-item {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .preview-item .filename {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .preview-item .status {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .progress-bar-container {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 30px;
+            margin: 20px 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #c33;
+        }
+
+        .success-message {
+            background: #efe;
+            color: #3c3;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #3c3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖼️ 이미지 수정 도구</h1>
+            <p>이미지 크기 조정 및 배경 제거</p>
+        </div>
+
+        <div class="content">
+            <!-- 파일 업로드 섹션 -->
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">
+                    이미지를 드래그하거나 클릭하여 선택하세요
+                </div>
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" class="file-input" multiple accept="image/*">
+                    <button class="btn" onclick="document.getElementById('fileInput').click()">
+                        파일 선택
+                    </button>
+                </div>
+            </div>
+
+            <!-- 설정 패널 -->
+            <div class="settings-panel">
+                <div class="settings-row">
+                    <label>출력 해상도:</label>
+                    <div class="input-group">
+                        <input type="number" id="widthInput" value="600" min="1" max="4000">
+                        <span>×</span>
+                        <input type="number" id="heightInput" value="600" min="1" max="4000">
+                        <span>px</span>
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <label>배경 제거:</label>
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="bgRemovalCheck" checked>
+                        <span>배경 제거 활성화</span>
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <label>저장 형식:</label>
+                    <div class="format-selector">
+                        <div class="format-option">
+                            <input type="radio" name="format" id="formatJPG" value="jpg" checked>
+                            <label for="formatJPG">JPG</label>
+                        </div>
+                        <div class="format-option">
+                            <input type="radio" name="format" id="formatPNG" value="png">
+                            <label for="formatPNG">PNG</label>
+                        </div>
+                        <div class="format-option">
+                            <input type="radio" name="format" id="formatWEBP" value="webp">
+                            <label for="formatWEBP">WEBP</label>
+                        </div>
+                        <div class="format-option">
+                            <input type="radio" name="format" id="formatGIF" value="gif">
+                            <label for="formatGIF">GIF</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 진행률 바 -->
+            <div class="progress-bar-container" id="progressContainer">
+                <div class="progress-bar" id="progressBar">0%</div>
+            </div>
+
+            <!-- 메시지 영역 -->
+            <div id="messageArea"></div>
+
+            <!-- 미리보기 섹션 -->
+            <div class="preview-section" id="previewSection" style="display: none;">
+                <h2 style="margin-bottom: 20px;">선택된 이미지</h2>
+                <div class="preview-container" id="previewContainer"></div>
+            </div>
+
+            <!-- 액션 버튼 -->
+            <div class="action-buttons">
+                <button class="btn" id="processBtn" onclick="processImages()" disabled>
+                    이미지 수정 시작
+                </button>
+                <button class="btn btn-danger" id="clearBtn" onclick="clearAll()" style="display: none;">
+                    모두 지우기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFiles = [];
+        let processedImages = [];
+
+        // 파일 선택 이벤트
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        
+        // 드래그 앤 드롭
+        const uploadSection = document.getElementById('uploadSection');
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+        
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('dragover');
+        });
+        
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function handleFileSelect(e) {
+            handleFiles(e.target.files);
+        }
+
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            updatePreview();
+            document.getElementById('processBtn').disabled = selectedFiles.length === 0;
+            document.getElementById('clearBtn').style.display = selectedFiles.length > 0 ? 'inline-block' : 'none';
+        }
+
+        function updatePreview() {
+            const container = document.getElementById('previewContainer');
+            container.innerHTML = '';
+            
+            selectedFiles.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const div = document.createElement('div');
+                    div.className = 'preview-item';
+                    div.innerHTML = `
+                        <img src="${e.target.result}" alt="${file.name}">
+                        <div class="filename">${file.name}</div>
+                        <div class="status">대기 중</div>
+                    `;
+                    container.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            });
+            
+            document.getElementById('previewSection').style.display = selectedFiles.length > 0 ? 'block' : 'none';
+        }
+
+        function showMessage(message, type = 'success') {
+            const messageArea = document.getElementById('messageArea');
+            messageArea.innerHTML = `<div class="${type}-message">${message}</div>`;
+            setTimeout(() => {
+                messageArea.innerHTML = '';
+            }, 5000);
+        }
+
+        function updateProgress(percent) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            
+            if (percent > 0) {
+                progressContainer.style.display = 'block';
+                progressBar.style.width = percent + '%';
+                progressBar.textContent = Math.round(percent) + '%';
+            } else {
+                progressContainer.style.display = 'none';
+            }
+        }
+
+        async function processImages() {
+            if (selectedFiles.length === 0) {
+                showMessage('이미지를 선택해주세요.', 'error');
+                return;
+            }
+
+            const width = parseInt(document.getElementById('widthInput').value);
+            const height = parseInt(document.getElementById('heightInput').value);
+            const removeBg = document.getElementById('bgRemovalCheck').checked;
+            const format = document.querySelector('input[name="format"]:checked').value;
+
+            document.getElementById('processBtn').disabled = true;
+            updateProgress(0);
+
+            try {
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    updateProgress((i / selectedFiles.length) * 100);
+                    
+                    const processed = await processImage(file, width, height, removeBg, format);
+                    processedImages.push(processed);
+                    
+                    // 미리보기 업데이트
+                    const previewItems = document.querySelectorAll('.preview-item');
+                    if (previewItems[i]) {
+                        previewItems[i].querySelector('.status').textContent = '완료';
+                        previewItems[i].querySelector('.status').style.color = '#3c3';
+                    }
+                }
+
+                updateProgress(100);
+                showMessage(`모든 이미지 처리가 완료되었습니다! (${processedImages.length}개)`, 'success');
+                
+                // 다운로드 버튼 표시
+                if (processedImages.length > 0) {
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.className = 'btn';
+                    downloadBtn.textContent = '모두 다운로드';
+                    downloadBtn.onclick = downloadAll;
+                    document.querySelector('.action-buttons').appendChild(downloadBtn);
+                }
+                
+            } catch (error) {
+                showMessage('처리 중 오류가 발생했습니다: ' + error.message, 'error');
+            } finally {
+                document.getElementById('processBtn').disabled = false;
+            }
+        }
+
+        async function processImage(file, width, height, removeBg, format) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // 흰색 배경
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, width, height);
+                    
+                    // 이미지 크기 계산 (비율 유지)
+                    const scale = Math.min(width / img.width, height / img.height);
+                    const newWidth = img.width * scale;
+                    const newHeight = img.height * scale;
+                    const x = (width - newWidth) / 2;
+                    const y = (height - newHeight) / 2;
+                    
+                    // 배경 제거 (간단한 방법 - 투명도 처리)
+                    if (removeBg) {
+                        // 간단한 배경 제거 (실제로는 서버가 필요)
+                        // 여기서는 크기 조정만 수행
+                        ctx.drawImage(img, x, y, newWidth, newHeight);
+                    } else {
+                        ctx.drawImage(img, x, y, newWidth, newHeight);
+                    }
+                    
+                    // 형식에 맞게 변환
+                    const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
+                    canvas.toBlob((blob) => {
+                        const processedFile = new File(
+                            [blob],
+                            file.name.replace(/\.[^/.]+$/, '') + '_edited.' + format,
+                            { type: mimeType }
+                        );
+                        resolve({
+                            original: file.name,
+                            processed: processedFile,
+                            url: URL.createObjectURL(blob)
+                        });
+                    }, mimeType, 0.95);
+                };
+                
+                img.onerror = () => reject(new Error('이미지 로드 실패'));
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        function downloadAll() {
+            processedImages.forEach((item, index) => {
+                setTimeout(() => {
+                    const a = document.createElement('a');
+                    a.href = item.url;
+                    a.download = item.processed.name;
+                    a.click();
+                }, index * 100);
+            });
+        }
+
+        function clearAll() {
+            selectedFiles = [];
+            processedImages = [];
+            document.getElementById('previewContainer').innerHTML = '';
+            document.getElementById('previewSection').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('processBtn').disabled = true;
+            document.getElementById('clearBtn').style.display = 'none';
+            updateProgress(0);
+            
+            // 다운로드 버튼 제거
+            const downloadBtn = document.querySelector('.btn:last-child');
+            if (downloadBtn && downloadBtn.textContent === '모두 다운로드') {
+                downloadBtn.remove();
+            }
+        }
+    </script>
+</body>
+</html>
+

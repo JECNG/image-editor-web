@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이미지 수정 도구 - 고급</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.2em;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 50px;
+            text-align: center;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-section:hover {
+            border-color: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+        }
+
+        .upload-section.dragover {
+            border-color: #764ba2;
+            background: linear-gradient(135deg, #e8ebff 0%, #e0e3ff 100%);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 5em;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 5px 10px rgba(0,0,0,0.1));
+        }
+
+        .upload-text {
+            font-size: 1.3em;
+            color: #667eea;
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 18px 35px;
+            font-size: 1.2em;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .settings-panel {
+            background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+            border-radius: 15px;
+            padding: 35px;
+            margin-bottom: 30px;
+            border: 2px solid #e8ebff;
+        }
+
+        .settings-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .settings-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .settings-row label {
+            font-weight: 700;
+            color: #333;
+            min-width: 140px;
+            font-size: 1.1em;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        input[type="number"], input[type="text"] {
+            padding: 12px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1.1em;
+            width: 120px;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        input[type="number"]:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 20px;
+            background: white;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+        }
+
+        input[type="checkbox"] {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
+
+        .format-selector {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .format-option {
+            position: relative;
+        }
+
+        .format-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+        }
+
+        .format-option label {
+            display: block;
+            padding: 12px 25px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .format-option input[type="radio"]:checked + label {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+            transform: scale(1.05);
+        }
+
+        .format-option label:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .preview-section {
+            margin-top: 30px;
+        }
+
+        .preview-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+            margin-top: 25px;
+        }
+
+        .preview-item {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            border: 2px solid #f0f0f0;
+        }
+
+        .preview-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            max-height: 300px;
+            object-fit: contain;
+        }
+
+        .preview-item .filename {
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 1.05em;
+            word-break: break-all;
+        }
+
+        .preview-item .status {
+            color: #666;
+            font-size: 0.95em;
+            padding: 5px 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            display: inline-block;
+        }
+
+        .preview-item .status.processing {
+            color: #667eea;
+            background: #e8ebff;
+        }
+
+        .preview-item .status.complete {
+            color: #28a745;
+            background: #d4edda;
+        }
+
+        .preview-item .status.error {
+            color: #dc3545;
+            background: #f8d7da;
+        }
+
+        .progress-bar-container {
+            background: #e0e0e0;
+            border-radius: 15px;
+            height: 40px;
+            margin: 25px 0;
+            overflow: hidden;
+            display: none;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.1em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 40px;
+            flex-wrap: wrap;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .message {
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-weight: 600;
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .error-message {
+            background: linear-gradient(135deg, #fee 0%, #fdd 100%);
+            color: #c33;
+            border-left: 5px solid #c33;
+        }
+
+        .success-message {
+            background: linear-gradient(135deg, #efe 0%, #dfd 100%);
+            color: #3c3;
+            border-left: 5px solid #3c3;
+        }
+
+        .info-message {
+            background: linear-gradient(135deg, #eef 0%, #ddf 100%);
+            color: #336;
+            border-left: 5px solid #336;
+        }
+
+        .file-count {
+            margin-top: 15px;
+            color: #667eea;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖼️ 이미지 수정 도구</h1>
+            <p>이미지 크기 조정 및 배경 제거</p>
+        </div>
+
+        <div class="content">
+            <!-- 파일 업로드 섹션 -->
+            <div class="upload-section" id="uploadSection" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">
+                    이미지를 드래그하거나 클릭하여 선택하세요
+                </div>
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" class="file-input" multiple accept="image/*">
+                </div>
+                <div class="file-count" id="fileCount" style="display: none;"></div>
+            </div>
+
+            <!-- 설정 패널 -->
+            <div class="settings-panel">
+                <div class="settings-row">
+                    <label>📐 출력 해상도:</label>
+                    <div class="input-group">
+                        <input type="number" id="widthInput" value="600" min="1" max="4000">
+                        <span style="font-weight: 700; font-size: 1.2em;">×</span>
+                        <input type="number" id="heightInput" value="600" min="1" max="4000">
+                        <span style="color: #667eea; font-weight: 600;">px</span>
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <label>🎨 배경 제거:</label>
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="bgRemovalCheck" checked>
+                        <span style="font-weight: 600;">배경 제거 활성화</span>
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <label>💾 저장 형식:</label>
+                    <div class="format-selector">
+                        <div class="format-option">
+                            <input type="radio" name="format" id="formatJPG" value="jpg" checked>
+                            <label for="formatJPG">JPG</label>
+                        </div>
+                        <div class="format-option">
+                            <input type="radio" name="format" id="formatPNG" value="png">
+                            <label for="formatPNG">PNG</label>
+                        </div>
+                        <div class="format-option">
+                            <input type="radio" name="format" id="formatWEBP" value="webp">
+                            <label for="formatWEBP">WEBP</label>
+                        </div>
+                        <div class="format-option">
+                            <input type="radio" name="format" id="formatGIF" value="gif">
+                            <label for="formatGIF">GIF</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 진행률 바 -->
+            <div class="progress-bar-container" id="progressContainer">
+                <div class="progress-bar" id="progressBar">0%</div>
+            </div>
+
+            <!-- 메시지 영역 -->
+            <div id="messageArea"></div>
+
+            <!-- 미리보기 섹션 -->
+            <div class="preview-section" id="previewSection" style="display: none;">
+                <h2 style="margin-bottom: 25px; color: #333; font-size: 1.8em;">선택된 이미지</h2>
+                <div class="preview-container" id="previewContainer"></div>
+            </div>
+
+            <!-- 액션 버튼 -->
+            <div class="action-buttons">
+                <button class="btn" id="processBtn" onclick="processImages()" disabled>
+                    ✨ 이미지 수정 시작
+                </button>
+                <button class="btn btn-danger" id="clearBtn" onclick="clearAll()" style="display: none;">
+                    🗑️ 모두 지우기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFiles = [];
+        let processedImages = [];
+
+        // 파일 선택 이벤트
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        
+        // 드래그 앤 드롭
+        const uploadSection = document.getElementById('uploadSection');
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+        
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('dragover');
+        });
+        
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function handleFileSelect(e) {
+            handleFiles(e.target.files);
+        }
+
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            updateFileCount();
+            updatePreview();
+            document.getElementById('processBtn').disabled = selectedFiles.length === 0;
+            document.getElementById('clearBtn').style.display = selectedFiles.length > 0 ? 'inline-block' : 'none';
+        }
+
+        function updateFileCount() {
+            const countEl = document.getElementById('fileCount');
+            if (selectedFiles.length > 0) {
+                countEl.textContent = `선택된 파일: ${selectedFiles.length}개`;
+                countEl.style.display = 'block';
+            } else {
+                countEl.style.display = 'none';
+            }
+        }
+
+        function updatePreview() {
+            const container = document.getElementById('previewContainer');
+            container.innerHTML = '';
+            
+            selectedFiles.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const div = document.createElement('div');
+                    div.className = 'preview-item';
+                    div.id = `preview-${index}`;
+                    div.innerHTML = `
+                        <img src="${e.target.result}" alt="${file.name}">
+                        <div class="filename">${file.name}</div>
+                        <div class="status">대기 중</div>
+                    `;
+                    container.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            });
+            
+            document.getElementById('previewSection').style.display = selectedFiles.length > 0 ? 'block' : 'none';
+        }
+
+        function showMessage(message, type = 'success') {
+            const messageArea = document.getElementById('messageArea');
+            const messageClass = type === 'error' ? 'error-message' : 
+                                 type === 'info' ? 'info-message' : 'success-message';
+            messageArea.innerHTML = `<div class="message ${messageClass}">${message}</div>`;
+            setTimeout(() => {
+                messageArea.innerHTML = '';
+            }, 5000);
+        }
+
+        function updateProgress(percent) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            
+            if (percent > 0) {
+                progressContainer.style.display = 'block';
+                progressBar.style.width = percent + '%';
+                progressBar.textContent = Math.round(percent) + '%';
+            } else {
+                progressContainer.style.display = 'none';
+            }
+        }
+
+        function updatePreviewStatus(index, status, className) {
+            const previewItem = document.getElementById(`preview-${index}`);
+            if (previewItem) {
+                const statusEl = previewItem.querySelector('.status');
+                statusEl.textContent = status;
+                statusEl.className = 'status ' + className;
+            }
+        }
+
+        async function processImages() {
+            if (selectedFiles.length === 0) {
+                showMessage('이미지를 선택해주세요.', 'error');
+                return;
+            }
+
+            const width = parseInt(document.getElementById('widthInput').value);
+            const height = parseInt(document.getElementById('heightInput').value);
+            const removeBg = document.getElementById('bgRemovalCheck').checked;
+            const format = document.querySelector('input[name="format"]:checked').value;
+
+            if (width < 1 || height < 1) {
+                showMessage('해상도를 올바르게 입력해주세요.', 'error');
+                return;
+            }
+
+            document.getElementById('processBtn').disabled = true;
+            processedImages = [];
+            updateProgress(0);
+
+            try {
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    const progress = ((i + 1) / selectedFiles.length) * 100;
+                    updateProgress(progress);
+                    updatePreviewStatus(i, '처리 중...', 'processing');
+                    
+                    try {
+                        const processed = await processImage(file, width, height, removeBg, format);
+                        processedImages.push(processed);
+                        updatePreviewStatus(i, '완료 ✓', 'complete');
+                    } catch (error) {
+                        updatePreviewStatus(i, '오류 ✗', 'error');
+                        showMessage(`${file.name} 처리 실패: ${error.message}`, 'error');
+                    }
+                }
+
+                updateProgress(100);
+                showMessage(`모든 이미지 처리가 완료되었습니다! (${processedImages.length}개)`, 'success');
+                
+                // 다운로드 버튼 표시
+                const actionButtons = document.querySelector('.action-buttons');
+                const existingDownloadBtn = document.getElementById('downloadAllBtn');
+                if (processedImages.length > 0 && !existingDownloadBtn) {
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.id = 'downloadAllBtn';
+                    downloadBtn.className = 'btn btn-success';
+                    downloadBtn.textContent = '📥 모두 다운로드';
+                    downloadBtn.onclick = downloadAll;
+                    actionButtons.appendChild(downloadBtn);
+                }
+                
+            } catch (error) {
+                showMessage('처리 중 오류가 발생했습니다: ' + error.message, 'error');
+            } finally {
+                document.getElementById('processBtn').disabled = false;
+            }
+        }
+
+        async function processImage(file, width, height, removeBg, format) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // 흰색 배경
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, width, height);
+                        
+                        // 이미지 크기 계산 (비율 유지)
+                        const scale = Math.min(width / img.width, height / img.height);
+                        const newWidth = img.width * scale;
+                        const newHeight = img.height * scale;
+                        const x = (width - newWidth) / 2;
+                        const y = (height - newHeight) / 2;
+                        
+                        // 배경 제거 (간단한 방법)
+                        if (removeBg) {
+                            // 실제 배경 제거는 서버가 필요하므로 여기서는 크기 조정만
+                            // 나중에 API를 추가할 수 있도록 구조 유지
+                            ctx.drawImage(img, x, y, newWidth, newHeight);
+                        } else {
+                            ctx.drawImage(img, x, y, newWidth, newHeight);
+                        }
+                        
+                        // 형식에 맞게 변환
+                        const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
+                        const quality = format === 'jpg' || format === 'webp' ? 0.95 : undefined;
+                        
+                        canvas.toBlob((blob) => {
+                            if (!blob) {
+                                reject(new Error('이미지 변환 실패'));
+                                return;
+                            }
+                            
+                            const processedFile = new File(
+                                [blob],
+                                file.name.replace(/\.[^/.]+$/, '') + '_edited.' + format,
+                                { type: mimeType }
+                            );
+                            
+                            resolve({
+                                original: file.name,
+                                processed: processedFile,
+                                url: URL.createObjectURL(blob)
+                            });
+                        }, mimeType, quality);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                
+                img.onerror = () => reject(new Error('이미지 로드 실패'));
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        function downloadAll() {
+            if (processedImages.length === 0) {
+                showMessage('다운로드할 이미지가 없습니다.', 'error');
+                return;
+            }
+            
+            processedImages.forEach((item, index) => {
+                setTimeout(() => {
+                    const a = document.createElement('a');
+                    a.href = item.url;
+                    a.download = item.processed.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }, index * 200);
+            });
+            
+            showMessage(`${processedImages.length}개 파일 다운로드 시작`, 'info');
+        }
+
+        function clearAll() {
+            selectedFiles = [];
+            processedImages = [];
+            document.getElementById('previewContainer').innerHTML = '';
+            document.getElementById('previewSection').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('processBtn').disabled = true;
+            document.getElementById('clearBtn').style.display = 'none';
+            updateProgress(0);
+            updateFileCount();
+            
+            // 다운로드 버튼 제거
+            const downloadBtn = document.getElementById('downloadAllBtn');
+            if (downloadBtn) {
+                downloadBtn.remove();
+            }
+        }
+    </script>
+</body>
+</html>
+
