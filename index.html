@@ -5,8 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>이미지 수정 & WEBP 변환 도구</title>
     <!-- ffmpeg.wasm CDN -->
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
-    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js" onerror="console.error('FFmpeg 스크립트 로드 실패')"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js" onerror="console.error('FFmpeg util 스크립트 로드 실패')"></script>
+    <script>
+        // FFmpeg 로드 확인
+        window.addEventListener('load', function() {
+            if (typeof FFmpeg === 'undefined') {
+                console.error('FFmpeg가 로드되지 않았습니다. CDN 연결을 확인해주세요.');
+            } else {
+                console.log('FFmpeg 로드 완료');
+            }
+        });
+    </script>
     <style>
         * {
             margin: 0;
@@ -1353,12 +1363,33 @@
         // ffmpeg.wasm 초기화
         let ffmpeg = null;
         let ffmpegLoaded = false;
+        let ffmpegLoading = false;
 
         async function loadFFmpeg() {
-            if (ffmpegLoaded) return;
+            if (ffmpegLoaded) return ffmpeg;
+            if (ffmpegLoading) {
+                // 이미 로딩 중이면 대기
+                while (ffmpegLoading && !ffmpegLoaded) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                return ffmpeg;
+            }
+            
+            ffmpegLoading = true;
             
             try {
+                // FFmpeg 전역 변수 확인
+                if (typeof FFmpeg === 'undefined') {
+                    throw new Error('FFmpeg 라이브러리가 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+                }
+                
                 showWebpMessage('FFmpeg 로딩 중... (처음 한 번만, 약 30초 소요)', 'info');
+                
+                // FFmpeg 모듈 확인
+                if (!FFmpeg.createFFmpeg || !FFmpeg.fetchFile) {
+                    throw new Error('FFmpeg 모듈이 올바르게 로드되지 않았습니다.');
+                }
+                
                 const { createFFmpeg, fetchFile } = FFmpeg;
                 ffmpeg = createFFmpeg({ 
                     log: false,
@@ -1367,8 +1398,11 @@
                 
                 await ffmpeg.load();
                 ffmpegLoaded = true;
+                ffmpegLoading = false;
                 showWebpMessage('✅ FFmpeg 로딩 완료! 이제 변환할 수 있습니다.', 'success');
+                return ffmpeg;
             } catch (error) {
+                ffmpegLoading = false;
                 showWebpMessage('❌ FFmpeg 로딩 실패: ' + error.message, 'error');
                 throw error;
             }
@@ -1423,6 +1457,11 @@
                     
                     try {
                         showWebpMessage(`${file.name} 변환 중...`, 'info');
+                        
+                        // FFmpeg 확인
+                        if (!ffmpeg || typeof FFmpeg === 'undefined' || !FFmpeg.fetchFile) {
+                            throw new Error('FFmpeg가 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+                        }
                         
                         // 파일을 메모리에 쓰기
                         const { fetchFile } = FFmpeg;
