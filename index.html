@@ -912,7 +912,7 @@
             }
         }
 
-        // 배경 제거 함수 (간단한 알고리즘)
+        // 개선된 배경 제거 함수 (다중 샘플링 + 엣지 감지)
         function removeBackground(canvas, ctx, img, x, y, imgWidth, imgHeight) {
             // 원본 이미지를 임시 캔버스에 그리기
             const tempCanvas = document.createElement('canvas');
@@ -923,72 +923,187 @@
             
             const imageData = tempCtx.getImageData(0, 0, img.width, img.height);
             const data = imageData.data;
+            const width = img.width;
+            const height = img.height;
             
-            // 가장자리 색상 샘플링 (배경색 추정)
+            // 1. 가장자리 색상 샘플링 (더 많은 샘플)
             const edgeSamples = [];
-            const sampleSize = Math.min(10, Math.floor(img.width / 20));
+            const sampleSize = Math.max(20, Math.floor(Math.min(width, height) / 10));
             
-            // 상단 가장자리
+            // 모서리 영역 샘플링 (더 정확한 배경색 추정)
+            const cornerSize = Math.min(50, Math.floor(Math.min(width, height) / 4));
+            
+            // 4개 모서리 영역 샘플링
+            for (let py = 0; py < cornerSize; py++) {
+                for (let px = 0; px < cornerSize; px++) {
+                    // 좌상단
+                    let idx = (px + py * width) * 4;
+                    edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+                    
+                    // 우상단
+                    idx = ((width - 1 - px) + py * width) * 4;
+                    edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+                    
+                    // 좌하단
+                    idx = (px + (height - 1 - py) * width) * 4;
+                    edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+                    
+                    // 우하단
+                    idx = ((width - 1 - px) + (height - 1 - py) * width) * 4;
+                    edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+                }
+            }
+            
+            // 가장자리 라인 샘플링
             for (let i = 0; i < sampleSize; i++) {
-                const px = Math.floor((i / sampleSize) * img.width);
-                const idx = (px + 0) * 4;
+                const px = Math.floor((i / sampleSize) * width);
+                // 상단
+                let idx = (px + 0) * 4;
+                edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+                // 하단
+                idx = (px + (height - 1) * width) * 4;
                 edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
             }
             
-            // 하단 가장자리
             for (let i = 0; i < sampleSize; i++) {
-                const px = Math.floor((i / sampleSize) * img.width);
-                const idx = (px + (img.height - 1) * img.width) * 4;
+                const py = Math.floor((i / sampleSize) * height);
+                // 좌측
+                let idx = (0 + py * width) * 4;
+                edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
+                // 우측
+                idx = ((width - 1) + py * width) * 4;
                 edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
             }
             
-            // 좌측 가장자리
-            for (let i = 0; i < sampleSize; i++) {
-                const py = Math.floor((i / sampleSize) * img.height);
-                const idx = (0 + py * img.width) * 4;
-                edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
-            }
+            // 2. 배경색 클러스터링 (K-means 스타일)
+            const bgColors = [];
+            const clusters = {};
             
-            // 우측 가장자리
-            for (let i = 0; i < sampleSize; i++) {
-                const py = Math.floor((i / sampleSize) * img.height);
-                const idx = ((img.width - 1) + py * img.width) * 4;
-                edgeSamples.push([data[idx], data[idx + 1], data[idx + 2]]);
-            }
-            
-            // 평균 배경색 계산
-            let avgR = 0, avgG = 0, avgB = 0;
             edgeSamples.forEach(sample => {
-                avgR += sample[0];
-                avgG += sample[1];
-                avgB += sample[2];
+                const key = `${Math.floor(sample[0]/10)}_${Math.floor(sample[1]/10)}_${Math.floor(sample[2]/10)}`;
+                if (!clusters[key]) {
+                    clusters[key] = { r: 0, g: 0, b: 0, count: 0 };
+                }
+                clusters[key].r += sample[0];
+                clusters[key].g += sample[1];
+                clusters[key].b += sample[2];
+                clusters[key].count++;
             });
-            avgR = Math.floor(avgR / edgeSamples.length);
-            avgG = Math.floor(avgG / edgeSamples.length);
-            avgB = Math.floor(avgB / edgeSamples.length);
             
-            // 배경 제거 (유사한 색상을 투명하게)
-            const threshold = 40; // 색상 차이 임계값
+            // 가장 많이 나타나는 색상 클러스터 찾기
+            let maxCount = 0;
+            let dominantColor = null;
+            Object.values(clusters).forEach(cluster => {
+                if (cluster.count > maxCount) {
+                    maxCount = cluster.count;
+                    dominantColor = {
+                        r: Math.floor(cluster.r / cluster.count),
+                        g: Math.floor(cluster.g / cluster.count),
+                        b: Math.floor(cluster.b / cluster.count)
+                    };
+                }
+            });
+            
+            if (!dominantColor) {
+                // 폴백: 평균 색상
+                let avgR = 0, avgG = 0, avgB = 0;
+                edgeSamples.forEach(sample => {
+                    avgR += sample[0];
+                    avgG += sample[1];
+                    avgB += sample[2];
+                });
+                dominantColor = {
+                    r: Math.floor(avgR / edgeSamples.length),
+                    g: Math.floor(avgG / edgeSamples.length),
+                    b: Math.floor(avgB / edgeSamples.length)
+                };
+            }
+            
+            // 3. 엣지 감지 (Sobel 필터 스타일)
+            const edgeMap = new Uint8Array(width * height);
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const idx = (x + y * width) * 4;
+                    const idxL = ((x - 1) + y * width) * 4;
+                    const idxR = ((x + 1) + y * width) * 4;
+                    const idxU = (x + (y - 1) * width) * 4;
+                    const idxD = (x + (y + 1) * width) * 4;
+                    
+                    const gx = Math.abs(data[idxR] - data[idxL]);
+                    const gy = Math.abs(data[idxD] - data[idxU]);
+                    const edge = Math.sqrt(gx * gx + gy * gy);
+                    edgeMap[x + y * width] = edge > 30 ? 255 : 0;
+                }
+            }
+            
+            // 4. 배경 제거 (적응형 임계값)
+            const baseThreshold = 50;
+            const edgeThreshold = 30; // 엣지 근처는 더 엄격하게
+            
             for (let i = 0; i < data.length; i += 4) {
+                const px = (i / 4) % width;
+                const py = Math.floor((i / 4) / width);
+                const isEdge = edgeMap[px + py * width] > 0;
+                
                 const r = data[i];
                 const g = data[i + 1];
                 const b = data[i + 2];
                 
-                // 배경색과의 거리 계산
-                const distance = Math.sqrt(
-                    Math.pow(r - avgR, 2) + 
-                    Math.pow(g - avgG, 2) + 
-                    Math.pow(b - avgB, 2)
-                );
+                // 색상 거리 계산 (CIE76 색상 공간)
+                const dr = r - dominantColor.r;
+                const dg = g - dominantColor.g;
+                const db = b - dominantColor.b;
+                const distance = Math.sqrt(dr * dr + dg * dg + db * db);
                 
-                // 임계값보다 작으면 투명하게
+                // 적응형 임계값
+                let threshold = baseThreshold;
+                if (isEdge) {
+                    threshold = edgeThreshold; // 엣지 근처는 더 엄격
+                } else if (px < cornerSize || px > width - cornerSize || 
+                          py < cornerSize || py > height - cornerSize) {
+                    threshold = baseThreshold * 1.5; // 가장자리는 더 관대하게
+                }
+                
+                // 배경 제거
                 if (distance < threshold) {
-                    data[i + 3] = 0; // 알파값을 0으로
+                    // 그라데이션 처리 (부드러운 전환)
+                    const alpha = Math.min(255, Math.floor((distance / threshold) * 255));
+                    data[i + 3] = alpha;
+                } else {
+                    data[i + 3] = 255; // 전경은 불투명
+                }
+            }
+            
+            // 5. 모폴로지 연산 (노이즈 제거)
+            const processedData = new Uint8ClampedArray(data);
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const idx = (x + y * width) * 4;
+                    const alpha = data[idx + 3];
+                    
+                    // 주변 픽셀의 알파값 확인
+                    let neighborCount = 0;
+                    let transparentCount = 0;
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            const nIdx = ((x + dx) + (y + dy) * width) * 4;
+                            neighborCount++;
+                            if (data[nIdx + 3] < 128) transparentCount++;
+                        }
+                    }
+                    
+                    // 고립된 픽셀 제거
+                    if (alpha > 128 && transparentCount > neighborCount * 0.7) {
+                        processedData[idx + 3] = 0;
+                    } else if (alpha < 128 && transparentCount < neighborCount * 0.3) {
+                        processedData[idx + 3] = 255;
+                    }
                 }
             }
             
             // 처리된 이미지 데이터를 다시 캔버스에 적용
-            tempCtx.putImageData(imageData, 0, 0);
+            const finalImageData = new ImageData(processedData, width, height);
+            tempCtx.putImageData(finalImageData, 0, 0);
             
             // 최종 캔버스에 투명 배경으로 그리기
             ctx.clearRect(0, 0, canvas.width, canvas.height);
