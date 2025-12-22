@@ -1,0 +1,23 @@
+다운로드 완료된 파일:
+====================
+✅ tf.min.js (1,428 KB) - TensorFlow.js Core
+✅ deeplab.min.js (17 KB) - DeepLab 로더
+
+다운로드 실패:
+=============
+❌ body-pix.min.js - 경로 문제로 실패
+
+body-pix 다운로드 방법:
+=====================
+1. 브라우저에서 직접 다운로드:
+   - https://unpkg.com/browse/@tensorflow-models/body-pix@2.2.1/
+   - dist 폴더에서 body-pix.min.js 찾기
+
+2. 또는 npm 사용:
+   npm install @tensorflow-models/body-pix
+   node_modules/@tensorflow-models/body-pix/dist/body-pix.min.js 복사
+
+3. GitHub에서:
+   - https://github.com/tensorflow/tfjs-models/tree/master/body-pix
+   - Releases 또는 dist 폴더 확인
+

@@ -1,0 +1,25 @@
+카페24 파일명 제약사항:
+====================
+카페24 디자인보관함은 파일명에 다음 문자를 허용하지 않습니다:
+/ * ? " < > | .
+
+해결 방법:
+==========
+파일명의 점(.)을 언더스코어(_)로 변경했습니다.
+
+변경된 파일명:
+=============
+- tf.min.js -> tf_min.js
+- body-pix.min.js -> body-pix_min.js  
+- deeplab.min.js -> deeplab_min.js
+
+HTML에서 사용 시:
+===============
+<script src="https://your-domain.cafe24.com/design/tfjs/tf_min.js"></script>
+<script src="https://your-domain.cafe24.com/design/tfjs/body-pix_min.js"></script>
+<script src="https://your-domain.cafe24.com/design/tfjs/deeplab_min.js"></script>
+
+참고:
+=====
+확장자(.js)의 점은 허용되지만, 파일명 중간의 점은 변경이 필요했습니다.
+

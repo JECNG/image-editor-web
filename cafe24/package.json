@@ -1,0 +1,9 @@
+{
+  "name": "cafe24-tensorflow-libs",
+  "version": "1.0.0",
+  "description": "TensorFlow.js libraries for Cafe24 design storage",
+  "dependencies": {
+    "@tensorflow-models/body-pix": "^2.2.1"
+  }
+}
+
