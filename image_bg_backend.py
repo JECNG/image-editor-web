@@ -72,6 +72,52 @@ def api_remove_bg():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/remove_bg_hq_jpg", methods=["POST"])
+def api_remove_bg_hq_jpg():
+    """
+    데스크탑 품질에 가깝게: 백엔드에서 배경제거 + 리사이즈/패딩까지 처리 후
+    고품질 JPG(quality=95, subsampling=0)를 바로 반환.
+    프론트는 재압축 없이 그대로 저장만 하면 됨.
+    """
+    if "file" not in request.files:
+        return jsonify({"error": "file 필드가 필요합니다."}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "빈 파일명입니다."}), 400
+
+    try:
+        img = Image.open(file.stream).convert("RGB")
+
+        try:
+            width = int(request.form.get("width", 0))
+            height = int(request.form.get("height", 0))
+        except ValueError:
+            width = height = 0
+
+        if width > 0 and height > 0:
+            bg_size = (width, height)
+        else:
+            bg_size = img.size
+
+        logging.info("HQ JPG 배경제거 요청: %s, size=%s -> bg_size=%s", file.filename, img.size, bg_size)
+        result = remove_background(img, bg_size)
+
+        buf = BytesIO()
+        # 데스크탑 품질에 최대한 근접한 고품질 JPG로 인코딩
+        result.save(buf, format="JPEG", quality=95, subsampling=0, optimize=True)
+        buf.seek(0)
+
+        return send_file(
+            buf,
+            mimetype="image/jpeg",
+            as_attachment=False,
+        )
+    except Exception as e:
+        logging.exception("HQ JPG 배경제거 처리 중 오류")
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
     # 로컬 테스트용 엔트리포인트
     # python github_release/image_bg_backend.py
