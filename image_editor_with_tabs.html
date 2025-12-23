@@ -1219,6 +1219,60 @@
             ctx.drawImage(tempCanvas, x, y, imgWidth, imgHeight);
         }
 
+        // 화이트 배경 상품용 크롭 (텍스트/여백 제거, JPG 전용 모드)
+        function cropWhiteBackground(canvas, ctx) {
+            const width = canvas.width;
+            const height = canvas.height;
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+
+            let top = height, bottom = -1, left = width, right = -1;
+            const topIgnore = Math.floor(height * 0.22); // 상단 텍스트 영역 무시
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    const r = data[idx];
+                    const g = data[idx + 1];
+                    const b = data[idx + 2];
+                    // 단순 밝기 기반 화이트 배경 판별
+                    const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+
+                    const isWhite = brightness > 245;
+                    if (!isWhite && y >= topIgnore) {
+                        if (y < top) top = y;
+                        if (y > bottom) bottom = y;
+                        if (x < left) left = x;
+                        if (x > right) right = x;
+                    }
+                }
+            }
+
+            // 유효 영역이 없으면 크롭 생략
+            if (bottom <= top || right <= left) {
+                return;
+            }
+
+            const cropW = right - left + 1;
+            const cropH = bottom - top + 1;
+
+            const tmp = document.createElement('canvas');
+            tmp.width = cropW;
+            tmp.height = cropH;
+            const tctx = tmp.getContext('2d');
+            tctx.drawImage(canvas, left, top, cropW, cropH, 0, 0, cropW, cropH);
+
+            // 원래 캔버스에 흰 배경 + 중앙 배치
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+            const scale = Math.min(width / cropW, height / cropH);
+            const newW = cropW * scale;
+            const newH = cropH * scale;
+            const dx = (width - newW) / 2;
+            const dy = (height - newH) / 2;
+            ctx.drawImage(tmp, dx, dy, newW, newH);
+        }
+
         async function processImage(file, width, height, removeBg, format) {
             return new Promise(async (resolve, reject) => {
                 try {
@@ -1227,16 +1281,19 @@
                     let sourceFile = file;
 
                     if (removeBg) {
-                        try {
-                            sourceBlob = await removeBackgroundViaApi(file, width, height);
-                            sourceFile = new File(
-                                [sourceBlob],
-                                file.name.replace(/\.[^/.]+$/, '') + '_nobg.png',
-                                { type: 'image/png' }
-                            );
-                        } catch (err) {
-                            alert('백엔드 배경제거 실패: ' + err.message);
-                            return reject(err); // 폴백 없이 실패 알림
+                        // PNG/WEBP 등 투명 배경이 필요한 경우만 백엔드 사용
+                        if (format !== 'jpg' && format !== 'jpeg') {
+                            try {
+                                sourceBlob = await removeBackgroundViaApi(file, width, height);
+                                sourceFile = new File(
+                                    [sourceBlob],
+                                    file.name.replace(/\.[^/.]+$/, '') + '_nobg.png',
+                                    { type: 'image/png' }
+                                );
+                            } catch (err) {
+                                alert('백엔드 배경제거 실패: ' + err.message);
+                                return reject(err); // 폴백 없이 실패 알림
+                            }
                         }
                     }
 
@@ -1254,10 +1311,16 @@
                             const x = (width - newWidth) / 2;
                             const y = (height - newHeight) / 2;
                             
-                            // 백엔드 성공 시에도 흰 배경 플래튼
+                            // 기본: 흰 배경 + 중앙 배치
                             ctx.fillStyle = '#FFFFFF';
                             ctx.fillRect(0, 0, width, height);
                             ctx.drawImage(img, x, y, newWidth, newHeight);
+
+                            // 화이트 배경 상품용 JPG + 배경제거 모드일 때는 규칙 기반 크롭 적용
+                            const isJpg = (format === 'jpg' || format === 'jpeg');
+                            if (removeBg && isJpg) {
+                                cropWhiteBackground(canvas, ctx);
+                            }
                             
                             // 출력 설정 (removeBg라도 JPG 선택 시 JPG로 저장하며 흰 배경으로 플래튼)
                             let outputFormat = format;
