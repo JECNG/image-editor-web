@@ -8,12 +8,12 @@
 
 #### Build Command
 ```
-pip install -r github_release/requirements_image_backend.txt
+pip install -r requirements_image_backend.txt
 ```
 
 #### Start Command
 ```
-cd github_release && gunicorn image_bg_backend:app --bind 0.0.0.0:$PORT
+gunicorn image_bg_backend:app --bind 0.0.0.0:$PORT
 ```
 
 ### 2. Environment Variables (선택사항)
