@@ -1313,7 +1313,9 @@
                             const x = (width - newWidth) / 2;
                             const y = (height - newHeight) / 2;
                             
-                            // 기본: 흰 배경 + 중앙 배치
+                            // 기본: 흰 배경 + 중앙 배치 (고품질 보간)
+                            ctx.imageSmoothingEnabled = true;
+                            ctx.imageSmoothingQuality = 'high';
                             ctx.fillStyle = '#FFFFFF';
                             ctx.fillRect(0, 0, width, height);
                             ctx.drawImage(img, x, y, newWidth, newHeight);
@@ -1327,7 +1329,8 @@
                             let outputFormat = format;
                             let mimeType = (format === 'jpg' || format === 'jpeg') ? 'image/jpeg' : `image/${format}`;
                             
-                            const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg' || outputFormat === 'webp') ? 0.95 : undefined;
+                            const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg') ? 1.0 :
+                                             (outputFormat === 'webp' ? 0.95 : undefined);
 
                             let outputCanvas = canvas;
                             if (removeBg && (outputFormat === 'jpg' || outputFormat === 'jpeg')) {
@@ -1335,6 +1338,8 @@
                                 flat.width = width;
                                 flat.height = height;
                                 const fctx = flat.getContext('2d');
+                                fctx.imageSmoothingEnabled = true;
+                                fctx.imageSmoothingQuality = 'high';
                                 fctx.fillStyle = '#FFFFFF';
                                 fctx.fillRect(0, 0, width, height);
                                 fctx.drawImage(canvas, 0, 0);
