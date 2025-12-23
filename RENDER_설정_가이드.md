@@ -13,8 +13,10 @@ pip install -r requirements_image_backend.txt
 
 #### Start Command
 ```
-gunicorn image_bg_backend:app --bind 0.0.0.0:$PORT
+gunicorn image_bg_backend:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
 ```
+
+**참고**: `--workers 1`은 Free 플랜의 메모리 제한을 고려한 설정입니다. `--timeout 120`은 모델 다운로드 및 이미지 처리 시간을 고려한 설정입니다.
 
 ### 2. Environment Variables (선택사항)
 

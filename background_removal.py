@@ -6,8 +6,17 @@ from rembg import remove, new_session
 import multiprocessing
 import cv2
 
-# 전역에서 1회만 모델 세션 로딩
-u2net_session = new_session('u2net')
+# 전역에서 1회만 모델 세션 로딩 (지연 로딩)
+u2net_session = None
+
+def get_session():
+    """모델 세션을 지연 로딩 (첫 사용 시에만 다운로드)"""
+    global u2net_session
+    if u2net_session is None:
+        logging.info("u2net 모델 세션 초기화 중...")
+        u2net_session = new_session('u2net')
+        logging.info("u2net 모델 세션 초기화 완료")
+    return u2net_session
 
 def is_mostly_white(image, threshold=220, ratio=0.9):
     gray = image.convert("L")
@@ -26,9 +35,10 @@ def remove_background(image, bg_size):
         img.save(buf, format="PNG")
         input_bytes = buf.getvalue()
         # 전역 세션 재사용
+        session = get_session()
         result_bytes = remove(
             input_bytes,
-            session=u2net_session,
+            session=session,
             alpha_matting=False
         )
         result = Image.open(BytesIO(result_bytes)).convert("RGBA")
