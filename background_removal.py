@@ -46,10 +46,17 @@ def remove_background(image, bg_size):
         result = Image.open(BytesIO(result_bytes)).convert("RGBA")
         np_img = np.array(result)
         alpha = np_img[..., 3]
-        # Trimap 생성 및 pymatting 적용
+
+        # 소금/후추 노이즈 제거 + 경계 매끄럽게 (작은 점 사라지도록)
+        alpha_denoised = cv2.morphologyEx(alpha, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+        alpha_denoised = cv2.morphologyEx(alpha_denoised, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+        alpha_denoised = cv2.GaussianBlur(alpha_denoised, (0, 0), sigmaX=1.5)
+        alpha_denoised = np.clip(alpha_denoised, 0, 255).astype(np.uint8)
+
+        # Trimap 생성 및 pymatting 적용 (조금 더 관대한 임계값으로 텍스트·금속 보존)
         from skimage.morphology import dilation, disk
         from pymatting import estimate_alpha_cf
-        def generate_trimap(alpha, fg_thresh=240, bg_thresh=10, kernel_size=10):
+        def generate_trimap(alpha, fg_thresh=230, bg_thresh=15, kernel_size=8):
             fg = alpha > fg_thresh
             bg = alpha < bg_thresh
             unknown = ~(fg | bg)
@@ -58,11 +65,18 @@ def remove_background(image, bg_size):
             trimap[bg] = 0
             trimap = dilation(trimap, disk(kernel_size))
             return trimap
-        trimap = generate_trimap(alpha)
+        trimap = generate_trimap(alpha_denoised)
         alpha_matted = estimate_alpha_cf(np_img[..., :3]/255.0, trimap/255.0)
         alpha_matted_uint8 = (alpha_matted * 255).astype(np.uint8)
-        # 객체만 crop
+
+        # 객체만 crop: 가장 큰 연결 성분만 남기기 (텍스트/잡영역 제거)
         mask = alpha_matted_uint8 > 0
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
+        if num_labels > 1:
+            # label 0은 배경
+            largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
+            mask = labels == largest_label
+            alpha_matted_uint8 = (mask * 255).astype(np.uint8)
         if not np.any(mask):
             # 객체가 없으면 흰색 배경만 반환
             return Image.new("RGB", bg_size, (255,255,255))

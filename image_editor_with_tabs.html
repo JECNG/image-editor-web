@@ -1254,28 +1254,35 @@
                             const y = (height - newHeight) / 2;
                             
                             if (removeBg && !sourceBlob) {
-                                // 백엔드 사용 실패 시, 기존 캔버스 기반 배경제거
+                                // 백엔드 사용 실패 시, 기존 캔버스 기반 배경제거 (투명 알파 생성)
                                 ctx.clearRect(0, 0, width, height);
                                 removeBackground(canvas, ctx, img, x, y, newWidth, newHeight);
                             } else {
-                                // 일반 모드 또는 백엔드 결과 사용
+                                // 일반 모드 또는 백엔드 결과 사용 -> 흰 배경 위에 그림
                                 ctx.fillStyle = '#FFFFFF';
                                 ctx.fillRect(0, 0, width, height);
                                 ctx.drawImage(img, x, y, newWidth, newHeight);
                             }
                             
-                            // JPEG는 투명도를 지원하지 않으므로 PNG로 변환
+                            // 출력 설정 (removeBg라도 JPG 선택 시 JPG로 저장하며 흰 배경으로 플래튼)
                             let outputFormat = format;
-                            let mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
-                            
-                            if (removeBg && (format === 'jpg' || format === 'jpeg')) {
-                                outputFormat = 'png';
-                                mimeType = 'image/png';
+                            let mimeType = (format === 'jpg' || format === 'jpeg') ? 'image/jpeg' : `image/${format}`;
+                            const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg' || outputFormat === 'webp') ? 0.95 : undefined;
+
+                            // 알파가 있는 경우 JPG로 저장하려면 흰 배경으로 플래튼
+                            let outputCanvas = canvas;
+                            if (removeBg && (outputFormat === 'jpg' || outputFormat === 'jpeg')) {
+                                const flat = document.createElement('canvas');
+                                flat.width = width;
+                                flat.height = height;
+                                const fctx = flat.getContext('2d');
+                                fctx.fillStyle = '#FFFFFF';
+                                fctx.fillRect(0, 0, width, height);
+                                fctx.drawImage(canvas, 0, 0);
+                                outputCanvas = flat;
                             }
                             
-                            const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg' || outputFormat === 'webp') ? 0.95 : undefined;
-                            
-                            canvas.toBlob((blob) => {
+                            outputCanvas.toBlob((blob) => {
                                 if (!blob) {
                                     reject(new Error('이미지 변환 실패'));
                                     return;
