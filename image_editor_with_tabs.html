@@ -1235,7 +1235,8 @@
                                 { type: 'image/png' }
                             );
                         } catch (err) {
-                            console.warn('백엔드 배경제거 실패, 프론트엔드 알고리즘으로 폴백:', err);
+                            alert('백엔드 배경제거 실패: ' + err.message);
+                            return reject(err); // 폴백 없이 실패 알림
                         }
                     }
 
@@ -1253,16 +1254,10 @@
                             const x = (width - newWidth) / 2;
                             const y = (height - newHeight) / 2;
                             
-                            if (removeBg && !sourceBlob) {
-                                // 백엔드 사용 실패 시, 기존 캔버스 기반 배경제거 (투명 알파 생성)
-                                ctx.clearRect(0, 0, width, height);
-                                removeBackground(canvas, ctx, img, x, y, newWidth, newHeight);
-                            } else {
-                                // 일반 모드 또는 백엔드 결과 사용 -> 흰 배경 위에 그림
-                                ctx.fillStyle = '#FFFFFF';
-                                ctx.fillRect(0, 0, width, height);
-                                ctx.drawImage(img, x, y, newWidth, newHeight);
-                            }
+                            // 백엔드 성공 시에도 흰 배경 플래튼
+                            ctx.fillStyle = '#FFFFFF';
+                            ctx.fillRect(0, 0, width, height);
+                            ctx.drawImage(img, x, y, newWidth, newHeight);
                             
                             // 출력 설정 (removeBg라도 JPG 선택 시 JPG로 저장하며 흰 배경으로 플래튼)
                             let outputFormat = format;
