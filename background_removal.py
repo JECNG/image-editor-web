@@ -69,14 +69,22 @@ def remove_background(image, bg_size):
         alpha_matted = estimate_alpha_cf(np_img[..., :3]/255.0, trimap/255.0)
         alpha_matted_uint8 = (alpha_matted * 255).astype(np.uint8)
 
-        # 객체만 crop: 가장 큰 연결 성분만 남기기 (텍스트/잡영역 제거)
-        mask = alpha_matted_uint8 > 0
+        # 객체만 crop: 작은 컴포넌트 제거 + 가장 큰 성분만 남기기 (텍스트/잡영역 제거)
+        mask = alpha_matted_uint8 > 25  # 너무 약한 알파는 제거
         num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
         if num_labels > 1:
-            # label 0은 배경
-            largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
-            mask = labels == largest_label
-            alpha_matted_uint8 = (mask * 255).astype(np.uint8)
+            h, w = mask.shape
+            min_area = max(500, int(h * w * 0.0005))  # 극소 영역 제거
+            keep_labels = [i for i in range(1, num_labels) if stats[i, cv2.CC_STAT_AREA] >= min_area]
+            if keep_labels:
+                largest_label = max(keep_labels, key=lambda i: stats[i, cv2.CC_STAT_AREA])
+                mask = labels == largest_label
+                alpha_matted_uint8 = (mask * 255).astype(np.uint8)
+            else:
+                # 모두 너무 작으면 가장 큰 것만 사용
+                largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
+                mask = labels == largest_label
+                alpha_matted_uint8 = (mask * 255).astype(np.uint8)
         if not np.any(mask):
             # 객체가 없으면 흰색 배경만 반환
             return Image.new("RGB", bg_size, (255,255,255))
