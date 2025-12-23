@@ -27,9 +27,11 @@ def is_mostly_white(image, threshold=220, ratio=0.9):
 
 def remove_background(image, bg_size):
     try:
-        if is_mostly_white(image):
-            logging.debug("이미지가 거의 흰색으로 구성되어 있어 배경제거 생략")
-            return image.convert("RGB")
+        # NOTE:
+        # 기존에는 거의 전체가 흰색인 이미지는 is_mostly_white() 판단 후
+        # 배경제거를 생략했는데, 실제 상품 사진(하얀 배경 위 상품)에서도
+        # 이 조건이 자주 걸려 버려서 \"배경제거 안됨\" 현상이 발생함.
+        # → 최종적으로 항상 rembg/u2net을 거치도록 변경.
         img = image.convert("RGB")
         buf = BytesIO()
         img.save(buf, format="PNG")
