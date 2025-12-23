@@ -876,7 +876,9 @@
             document.getElementById('imagePreviewSection').style.display = imageFiles.length > 0 ? 'block' : 'none';
         }
 
-        const REMOVE_BG_API_URL = 'http://localhost:5001/api/remove_bg';
+        // Render 배포 URL (배포 완료 후 사용)
+        const REMOVE_BG_API_URL = 'https://image-editor-web.onrender.com/api/remove_bg';
+        // 로컬 테스트용: 'http://localhost:5001/api/remove_bg';
 
         async function removeBackgroundViaApi(file, width, height) {
             if (!REMOVE_BG_API_URL) {

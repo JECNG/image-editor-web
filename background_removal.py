@@ -68,3 +68,4 @@ def remove_background(image, bg_size):
         logging.error(f"배경제거 실패: {e}")
         return image.convert("RGB")
 
+

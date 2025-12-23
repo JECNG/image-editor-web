@@ -1,0 +1,8 @@
+{
+  "name": "image-editor-web",
+  "description": "Web-based image editor and MP4 to WEBP/GIF converter using ffmpeg.wasm",
+  "private": false
+}
+
+
+
