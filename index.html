@@ -1259,7 +1259,13 @@
 
             ctx.fillStyle = '#FFFFFF';
             ctx.fillRect(0, 0, width, height);
-            const scale = Math.min(width / cropW, height / cropH);
+            // 긴 변이 targetSize(예: 600)를 넘을 때만 축소, 작으면 원본 크기 유지
+            const longest = Math.max(cropW, cropH);
+            const targetSize = Math.min(width, height);
+            let scale = 1;
+            if (longest > targetSize) {
+                scale = targetSize / longest;
+            }
             const newW = cropW * scale;
             const newH = cropH * scale;
             const dx = (width - newW) / 2;
