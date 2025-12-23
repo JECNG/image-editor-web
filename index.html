@@ -1273,6 +1273,26 @@
             ctx.drawImage(tmp, dx, dy, newW, newH);
         }
 
+        // HQ JPG 모드: 백엔드에서 고품질 JPG까지 생성
+        async function removeBackgroundViaApiHqJpg(file, width, height) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('width', String(width));
+            formData.append('height', String(height));
+
+            const response = await fetch('https://image-editor-web.onrender.com/api/remove_bg_hq_jpg', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`HQ JPG 백엔드 오류 (${response.status}): ${text}`);
+            }
+
+            return await response.blob();
+        }
+
         async function processImage(file, width, height, removeBg, format) {
             return new Promise(async (resolve, reject) => {
                 try {
@@ -1281,19 +1301,39 @@
                     let sourceFile = file;
 
                     if (removeBg) {
-                        // PNG/WEBP 등 투명 배경이 필요한 경우만 백엔드 사용
-                        if (format !== 'jpg' && format !== 'jpeg') {
+                        const isJpg = (format === 'jpg' || format === 'jpeg');
+
+                        // JPG + 배경제거는 항상 HQ 백엔드 경로 사용 (캔버스 재압축 없음)
+                        if (isJpg) {
                             try {
-                                sourceBlob = await removeBackgroundViaApi(file, width, height);
-                                sourceFile = new File(
-                                    [sourceBlob],
-                                    file.name.replace(/\.[^/.]+$/, '') + '_nobg.png',
-                                    { type: 'image/png' }
+                                const blob = await removeBackgroundViaApiHqJpg(file, width, height);
+                                const processedFile = new File(
+                                    [blob],
+                                    file.name.replace(/\.[^/.]+$/, '') + '_edited.jpg',
+                                    { type: 'image/jpeg' }
                                 );
+                                return resolve({
+                                    original: file.name,
+                                    processed: processedFile,
+                                    url: URL.createObjectURL(blob)
+                                });
                             } catch (err) {
-                                alert('백엔드 배경제거 실패: ' + err.message);
+                                alert('HQ JPG 백엔드 배경제거 실패: ' + err.message);
                                 return reject(err);
                             }
+                        }
+
+                        // PNG/WEBP 등 투명 배경이 필요한 경우만 기존 백엔드 사용
+                        try {
+                            sourceBlob = await removeBackgroundViaApi(file, width, height);
+                            sourceFile = new File(
+                                [sourceBlob],
+                                file.name.replace(/\.[^/.]+$/, '') + '_nobg.png',
+                                { type: 'image/png' }
+                            );
+                        } catch (err) {
+                            alert('백엔드 배경제거 실패: ' + err.message);
+                            return reject(err);
                         }
                     }
 
