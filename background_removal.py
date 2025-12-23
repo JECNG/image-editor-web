@@ -85,10 +85,38 @@ def remove_background(image, bg_size):
                 largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
                 mask = labels == largest_label
                 alpha_matted_uint8 = (mask * 255).astype(np.uint8)
-        if not np.any(mask):
-            # 객체가 없으면 흰색 배경만 반환
+
+        # 강한 마스크 기반으로 bbox 재계산 (희미한 텍스트 제거)
+        strong_mask = alpha_matted_uint8 > 180
+        num_labels2, labels2, stats2, _ = cv2.connectedComponentsWithStats(strong_mask.astype(np.uint8), connectivity=8)
+        if num_labels2 > 1:
+            h, w = strong_mask.shape
+            min_area2 = max(800, int(h * w * 0.001))
+            keep_labels2 = [i for i in range(1, num_labels2) if stats2[i, cv2.CC_STAT_AREA] >= min_area2]
+            if keep_labels2:
+                largest_label2 = max(keep_labels2, key=lambda i: stats2[i, cv2.CC_STAT_AREA])
+                strong_mask = labels2 == largest_label2
+            else:
+                largest_label2 = 1 + np.argmax(stats2[1:, cv2.CC_STAT_AREA])
+                strong_mask = labels2 == largest_label2
+            # strong bbox 사용
+            ys2, xs2 = np.where(strong_mask)
+            if ys2.size > 0 and xs2.size > 0:
+                ymin2, ymax2 = ys2.min(), ys2.max()
+                xmin2, xmax2 = xs2.min(), xs2.max()
+                # 기존 마스크도 bbox 밖은 제거
+                mask_bbox = np.zeros_like(alpha_matted_uint8, dtype=bool)
+                mask_bbox[ymin2:ymax2+1, xmin2:xmax2+1] = True
+                alpha_matted_uint8 = (alpha_matted_uint8 * mask_bbox).astype(np.uint8)
+
+        # 강제 이진화 + 모폴로지로 배경 축출 강화
+        alpha_binary = (alpha_matted_uint8 > 60).astype(np.uint8) * 255
+        alpha_binary = cv2.morphologyEx(alpha_binary, cv2.MORPH_OPEN, np.ones((3,3), np.uint8))
+
+        if not np.any(alpha_binary):
             return Image.new("RGB", bg_size, (255,255,255))
-        ys, xs = np.where(mask)
+
+        ys, xs = np.where(alpha_binary)
         ymin, ymax = ys.min(), ys.max()
         xmin, xmax = xs.min(), xs.max()
         cropped = result.crop((xmin, ymin, xmax+1, ymax+1))
