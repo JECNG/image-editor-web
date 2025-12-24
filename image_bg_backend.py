@@ -11,7 +11,14 @@ from skimage.measure import label, regionprops
 from pymatting import estimate_alpha_cf
 
 app = Flask(__name__)
-CORS(app)  # CORS 허용
+# CORS 명시적 설정 (GitHub Pages 포함)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["https://jecng.github.io", "http://localhost:*", "https://*.github.io"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # 모델 세션을 lazy load로 변경 (메모리 절약 및 시작 시간 단축)
 u2net_session = None
@@ -79,13 +86,18 @@ def generate_trimap(alpha, fg_thresh=230, bg_thresh=15, kernel_size=8):
     trimap = dilation(trimap, disk(kernel_size))
     return trimap
 
-@app.route('/api/health', methods=['GET'])
+@app.route('/api/health', methods=['GET', 'OPTIONS'])
 def health_check():
     """서버 상태 확인"""
+    if request.method == 'OPTIONS':
+        return '', 200
     return {'status': 'ok'}, 200
 
-@app.route('/api/remove_bg', methods=['POST'])
+@app.route('/api/remove_bg', methods=['POST', 'OPTIONS'])
 def remove_bg():
+    """배경 제거 API"""
+    if request.method == 'OPTIONS':
+        return '', 200
     """배경 제거 API"""
     try:
         if 'file' not in request.files:
