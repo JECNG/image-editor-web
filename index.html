@@ -1127,6 +1127,20 @@
 
         // Render 배포 URL
         const REMOVE_BG_API_URL = 'https://image-editor-web.onrender.com/api/remove_bg';
+        const REMOVE_BG_HEALTH_URL = 'https://image-editor-web.onrender.com/api/health';
+        
+        // 백엔드 상태 확인
+        async function checkBackendHealth() {
+            try {
+                const response = await fetch(REMOVE_BG_HEALTH_URL, {
+                    method: 'GET',
+                    signal: AbortSignal.timeout(5000), // 5초 타임아웃
+                });
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
 
         async function removeBackgroundViaApi(file, width, height) {
             if (!REMOVE_BG_API_URL) {
@@ -1138,17 +1152,33 @@
             formData.append('width', String(width));
             formData.append('height', String(height));
 
-            const response = await fetch(REMOVE_BG_API_URL, {
-                method: 'POST',
-                body: formData,
-            });
+            try {
+                // 타임아웃 설정 (Render 무료 플랜 콜드 스타트 대응: 60초)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000);
+                
+                const response = await fetch(REMOVE_BG_API_URL, {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal,
+                });
+                
+                clearTimeout(timeoutId);
 
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`백엔드 오류 (${response.status}): ${text}`);
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(`백엔드 오류 (${response.status}): ${text}`);
+                }
+
+                return await response.blob(); // PNG with alpha
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    throw new Error('백엔드 타임아웃 (60초 초과). Render 무료 플랜은 첫 요청 시 15초 정도 지연될 수 있습니다.');
+                } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    throw new Error('백엔드 서버에 연결할 수 없습니다. Render.com 서비스가 다운되었거나 네트워크 문제일 수 있습니다.');
+                }
+                throw error;
             }
-
-            return await response.blob(); // PNG with alpha
         }
 
         // 화이트 배경 상품용 크롭 (텍스트/여백 제거, JPG 전용 모드) - 폴백용
@@ -1230,6 +1260,13 @@
                     // 배경제거 모드: 백엔드 API 사용 (데스크톱 버전과 동일한 rembg/u2net)
                     // 원본 이미지를 그대로 백엔드로 전송 (리사이징 전)
                     if (removeBg) {
+                        // 백엔드 상태 확인
+                        const backendAvailable = await checkBackendHealth();
+                        if (!backendAvailable) {
+                            console.warn('백엔드 서버가 응답하지 않습니다. 로컬 폴백 모드를 사용합니다.');
+                            return processImageLocal(file, width, height, removeBg, format, resolve, reject);
+                        }
+                        
                         try {
                             const sourceBlob = await removeBackgroundViaApi(file, width, height);
                             const sourceFile = new File(
@@ -1304,8 +1341,9 @@
                             img.onerror = () => reject(new Error('이미지 로드 실패'));
                             img.src = URL.createObjectURL(sourceFile);
                         } catch (err) {
-                            alert('백엔드 배경제거 실패: ' + err.message + '\n로컬 폴백 모드로 시도합니다.');
-                            // 폴백: 로컬 처리
+                            console.warn('백엔드 배경제거 실패:', err.message);
+                            // 폴백: 로컬 처리 (단순 밝기 기반 크롭)
+                            // 주의: 로컬 폴백은 AI 기반 배경제거가 아니므로 품질이 낮을 수 있음
                             return processImageLocal(file, width, height, removeBg, format, resolve, reject);
                         }
                     } else {
