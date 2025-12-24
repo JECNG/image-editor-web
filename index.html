@@ -1181,15 +1181,16 @@
 
             ctx.fillStyle = '#FFFFFF';
             ctx.fillRect(0, 0, width, height);
-            // 긴 변이 targetSize를 넘을 때만 축소, 작으면 원본 크기 유지
-            const longest = Math.max(finalCropW, finalCropH);
-            const targetSize = Math.min(width, height);
-            let scale = 1;
-            if (longest > targetSize) {
-                scale = targetSize / longest;
+            // 데스크톱 버전과 동일: thumbnail 방식 (width, height 둘 다 체크)
+            let newW = finalCropW;
+            let newH = finalCropH;
+            // 둘 다 size 안에 들어가도록 스케일 조정 (큰 쪽만 축소, 작은 건 그대로)
+            if (newW > width || newH > height) {
+                const scale = Math.min(width / newW, height / newH);
+                newW = finalCropW * scale;
+                newH = finalCropH * scale;
             }
-            const newW = finalCropW * scale;
-            const newH = finalCropH * scale;
+            // 작은 건 그대로 유지 (업스케일 안 함)
             const dx = (width - newW) / 2;
             const dy = (height - newH) / 2;
             ctx.drawImage(tmp, dx, dy, newW, newH);
@@ -1209,9 +1210,16 @@
                         ctx.imageSmoothingEnabled = true;
                         ctx.imageSmoothingQuality = 'high';
                         
-                        const scale = Math.min(width / img.width, height / img.height);
-                        const newWidth = img.width * scale;
-                        const newHeight = img.height * scale;
+                        // 데스크톱 버전과 동일: thumbnail 방식 (width, height 둘 다 체크)
+                        let newWidth = img.width;
+                        let newHeight = img.height;
+                        // 둘 다 size 안에 들어가도록 스케일 조정 (큰 쪽만 축소, 작은 건 그대로)
+                        if (newWidth > width || newHeight > height) {
+                            const scale = Math.min(width / newWidth, height / newHeight);
+                            newWidth = img.width * scale;
+                            newHeight = img.height * scale;
+                        }
+                        // 작은 건 그대로 유지 (업스케일 안 함)
                         const x = (width - newWidth) / 2;
                         const y = (height - newHeight) / 2;
                         
