@@ -4,15 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>이미지 수정 & WEBP 변환 도구</title>
-    <!-- ffmpeg.wasm CDN (단일 UMD 번들) -->
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js" onerror="console.error('FFmpeg 스크립트 로드 실패')"></script>
-    
-    <!-- TensorFlow.js for AI-based background removal -->
-    <!-- 카페24 디자인보관함 경로 -->
-    <script src="https://suninjang300.cafe24.com/tfjs/tf_min.js"></script>
-    <script src="https://suninjang300.cafe24.com/tfjs/body-pix_min.js"></script>
-    <script src="https://suninjang300.cafe24.com/tfjs/deeplab_min.js"></script>
-    
+    <!-- ffmpeg.wasm CDN -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js" onerror="console.error('FFmpeg 스크립트 로드 실패')"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js" onerror="console.error('FFmpeg util 스크립트 로드 실패')"></script>
     <script>
         // FFmpeg 로드 확인
         window.addEventListener('load', function() {
@@ -20,13 +14,6 @@
                 console.error('FFmpeg가 로드되지 않았습니다. CDN 연결을 확인해주세요.');
             } else {
                 console.log('FFmpeg 로드 완료');
-            }
-            
-            // TensorFlow.js 로드 확인
-            if (typeof tf === 'undefined') {
-                console.warn('TensorFlow.js가 로드되지 않았습니다. AI 배경제거 기능이 제한됩니다.');
-            } else {
-                console.log('TensorFlow.js 로드 완료');
             }
         });
     </script>
@@ -876,31 +863,6 @@
             document.getElementById('imagePreviewSection').style.display = imageFiles.length > 0 ? 'block' : 'none';
         }
 
-        const REMOVE_BG_API_URL = 'http://localhost:5001/api/remove_bg';
-
-        async function removeBackgroundViaApi(file, width, height) {
-            if (!REMOVE_BG_API_URL) {
-                throw new Error('REMOVE_BG_API_URL이 설정되지 않았습니다.');
-            }
-
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('width', String(width));
-            formData.append('height', String(height));
-
-            const response = await fetch(REMOVE_BG_API_URL, {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`백엔드 오류 (${response.status}): ${text}`);
-            }
-
-            return await response.blob(); // PNG with alpha
-        }
-
         async function processImages() {
             if (imageFiles.length === 0) {
                 showImageMessage('이미지를 선택해주세요.', 'error');
@@ -960,65 +922,6 @@
             }
         }
 
-        // TensorFlow.js 모델 로딩
-        let segmentationModel = null;
-        let modelLoading = false;
-        
-        async function loadSegmentationModel() {
-            if (segmentationModel) return segmentationModel;
-            if (modelLoading) {
-                while (modelLoading) await new Promise(r => setTimeout(r, 100));
-                return segmentationModel;
-            }
-            
-            if (typeof tf === 'undefined') {
-                throw new Error('TensorFlow.js가 로드되지 않았습니다.');
-            }
-            
-            modelLoading = true;
-            try {
-                // DeepLab v3 모델 로드 (카페24 디자인보관함 경로로 변경 가능)
-                // const modelUrl = 'https://your-domain.cafe24.com/design/models/deeplab/model.json';
-                const modelUrl = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/deeplab@2.2.2/dist/deeplab.min.js';
-                
-                // DeepLab 대신 간단한 방법: TensorFlow.js로 직접 세그멘테이션
-                // 실제로는 DeepLab 모델 파일이 필요하므로, 우선 기존 알고리즘 개선
-                modelLoading = false;
-                return null; // 모델 없이 진행
-            } catch (error) {
-                modelLoading = false;
-                console.warn('AI 모델 로드 실패, 기본 알고리즘 사용:', error);
-                return null;
-            }
-        }
-        
-        // AI 기반 배경 제거 (TensorFlow.js 사용)
-        async function removeBackgroundAI(canvas, ctx, img, x, y, imgWidth, imgHeight) {
-            try {
-                await loadSegmentationModel();
-                
-                // TensorFlow.js로 세그멘테이션 수행
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = img.width;
-                tempCanvas.height = img.height;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.drawImage(img, 0, 0);
-                
-                // TensorFlow.js로 이미지 처리
-                const imageTensor = tf.browser.fromPixels(tempCanvas);
-                // 간단한 배경 감지 (실제로는 DeepLab 모델 필요)
-                // 여기서는 기존 알고리즘과 결합
-                
-                imageTensor.dispose();
-                
-                // AI 실패 시 기본 알고리즘으로 폴백
-                removeBackground(canvas, ctx, img, x, y, imgWidth, imgHeight);
-            } catch (error) {
-                console.warn('AI 배경제거 실패, 기본 알고리즘 사용:', error);
-                removeBackground(canvas, ctx, img, x, y, imgWidth, imgHeight);
-            }
-        }
-        
         // 개선된 배경 제거 함수 (다중 샘플링 + 엣지 감지)
         function removeBackground(canvas, ctx, img, x, y, imgWidth, imgHeight) {
             // 원본 이미지를 임시 캔버스에 그리기
@@ -1026,6 +929,9 @@
             tempCanvas.width = img.width;
             tempCanvas.height = img.height;
             const tempCtx = tempCanvas.getContext('2d');
+            // 고품질 보간 설정
+            tempCtx.imageSmoothingEnabled = true;
+            tempCtx.imageSmoothingQuality = 'high';
             tempCtx.drawImage(img, 0, 0);
             
             const imageData = tempCtx.getImageData(0, 0, img.width, img.height);
@@ -1213,167 +1119,81 @@
             tempCtx.putImageData(finalImageData, 0, 0);
             
             // 최종 캔버스에 투명 배경으로 그리기
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(tempCanvas, x, y, imgWidth, imgHeight);
         }
 
-        // 화이트 배경 상품용 크롭 (텍스트/여백 제거, JPG 전용 모드)
-        function cropWhiteBackground(canvas, ctx) {
-            const width = canvas.width;
-            const height = canvas.height;
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
-
-            let top = height, bottom = -1, left = width, right = -1;
-            const topIgnore = Math.floor(height * 0.22); // 상단 텍스트 영역 무시
-
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const idx = (y * width + x) * 4;
-                    const r = data[idx];
-                    const g = data[idx + 1];
-                    const b = data[idx + 2];
-                    const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-                    const isWhite = brightness > 245;
-                    if (!isWhite && y >= topIgnore) {
-                        if (y < top) top = y;
-                        if (y > bottom) bottom = y;
-                        if (x < left) left = x;
-                        if (x > right) right = x;
-                    }
-                }
-            }
-
-            if (bottom <= top || right <= left) {
-                return;
-            }
-
-            const cropW = right - left + 1;
-            const cropH = bottom - top + 1;
-
-            const tmp = document.createElement('canvas');
-            tmp.width = cropW;
-            tmp.height = cropH;
-            const tctx = tmp.getContext('2d');
-            tctx.drawImage(canvas, left, top, cropW, cropH, 0, 0, cropW, cropH);
-
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, width, height);
-            // 긴 변이 targetSize(예: 600)를 넘을 때만 축소, 작으면 원본 크기 유지
-            const longest = Math.max(cropW, cropH);
-            const targetSize = Math.min(width, height);
-            let scale = 1;
-            if (longest > targetSize) {
-                scale = targetSize / longest;
-            }
-            const newW = cropW * scale;
-            const newH = cropH * scale;
-            const dx = (width - newW) / 2;
-            const dy = (height - newH) / 2;
-            ctx.drawImage(tmp, dx, dy, newW, newH);
-        }
-
         async function processImage(file, width, height, removeBg, format) {
-            return new Promise(async (resolve, reject) => {
-                try {
-                    // 1) rembg/u2net 백엔드 우선 시도
-                    let sourceBlob = null;
-                    let sourceFile = file;
-
-                    if (removeBg) {
-                        const isJpg = (format === 'jpg' || format === 'jpeg');
-                        // JPG는 프론트 화이트 배경 크롭(캔버스)만 사용, 백엔드 호출 안 함
-                        // PNG/WEBP 등 투명 배경이 필요한 경우만 기존 백엔드 사용
-                        if (!isJpg) {
-                            try {
-                                sourceBlob = await removeBackgroundViaApi(file, width, height);
-                                sourceFile = new File(
-                                    [sourceBlob],
-                                    file.name.replace(/\.[^/.]+$/, '') + '_nobg.png',
-                                    { type: 'image/png' }
-                                );
-                            } catch (err) {
-                                alert('백엔드 배경제거 실패: ' + err.message);
-                                return reject(err);
-                            }
-                        }
-                    }
-
-                    const img = new Image();
-                    img.onload = () => {
-                        try {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = width;
-                            canvas.height = height;
-                            const ctx = canvas.getContext('2d');
-                            
-                            const scale = Math.min(width / img.width, height / img.height);
-                            const newWidth = img.width * scale;
-                            const newHeight = img.height * scale;
-                            const x = (width - newWidth) / 2;
-                            const y = (height - newHeight) / 2;
-                            
-                            // 기본: 흰 배경 + 중앙 배치 (고품질 보간)
-                            ctx.imageSmoothingEnabled = true;
-                            ctx.imageSmoothingQuality = 'high';
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // 고품질 보간 설정
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        
+                        const scale = Math.min(width / img.width, height / img.height);
+                        const newWidth = img.width * scale;
+                        const newHeight = img.height * scale;
+                        const x = (width - newWidth) / 2;
+                        const y = (height - newHeight) / 2;
+                        
+                        if (removeBg) {
+                            // 배경 제거 모드: 투명 배경
+                            ctx.clearRect(0, 0, width, height);
+                            removeBackground(canvas, ctx, img, x, y, newWidth, newHeight);
+                        } else {
+                            // 일반 모드: 흰색 배경
                             ctx.fillStyle = '#FFFFFF';
                             ctx.fillRect(0, 0, width, height);
                             ctx.drawImage(img, x, y, newWidth, newHeight);
-
-                            // 화이트 배경 상품용 JPG + 배경제거 모드일 때는 규칙 기반 크롭 적용
-                            const isJpg = (format === 'jpg' || format === 'jpeg');
-                            if (removeBg && isJpg) {
-                                cropWhiteBackground(canvas, ctx);
-                            }
-                            
-                            let outputFormat = format;
-                            let mimeType = (format === 'jpg' || format === 'jpeg') ? 'image/jpeg' : `image/${format}`;
-                            
-                            const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg') ? 1.0 :
-                                             (outputFormat === 'webp' ? 0.95 : undefined);
-
-                            let outputCanvas = canvas;
-                            if (removeBg && (outputFormat === 'jpg' || outputFormat === 'jpeg')) {
-                                const flat = document.createElement('canvas');
-                                flat.width = width;
-                                flat.height = height;
-                                const fctx = flat.getContext('2d');
-                                fctx.imageSmoothingEnabled = true;
-                                fctx.imageSmoothingQuality = 'high';
-                                fctx.fillStyle = '#FFFFFF';
-                                fctx.fillRect(0, 0, width, height);
-                                fctx.drawImage(canvas, 0, 0);
-                                outputCanvas = flat;
-                            }
-                            
-                            outputCanvas.toBlob((blob) => {
-                                if (!blob) {
-                                    reject(new Error('이미지 변환 실패'));
-                                    return;
-                                }
-                                
-                                const processedFile = new File(
-                                    [blob],
-                                    file.name.replace(/\.[^/.]+$/, '') + '_edited.' + outputFormat,
-                                    { type: mimeType }
-                                );
-                                
-                                resolve({
-                                    original: file.name,
-                                    processed: processedFile,
-                                    url: URL.createObjectURL(blob)
-                                });
-                            }, mimeType, quality);
-                        } catch (error) {
-                            reject(error);
                         }
-                    };
-                    
-                    img.onerror = () => reject(new Error('이미지 로드 실패'));
-                    img.src = URL.createObjectURL(sourceFile);
-                } catch (outer) {
-                    reject(outer);
-                }
+                        
+                        // JPEG는 투명도를 지원하지 않으므로 PNG로 변환
+                        let outputFormat = format;
+                        let mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
+                        
+                        if (removeBg && (format === 'jpg' || format === 'jpeg')) {
+                            outputFormat = 'png';
+                            mimeType = 'image/png';
+                        }
+                        
+                        // JPG는 0.98, WEBP는 0.95 (1.0은 브라우저 구현에 따라 역효과 가능)
+                        const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg') ? 0.98 :
+                                       (outputFormat === 'webp') ? 0.95 : undefined;
+                        
+                        canvas.toBlob((blob) => {
+                            if (!blob) {
+                                reject(new Error('이미지 변환 실패'));
+                                return;
+                            }
+                            
+                            const processedFile = new File(
+                                [blob],
+                                file.name.replace(/\.[^/.]+$/, '') + '_edited.' + outputFormat,
+                                { type: mimeType }
+                            );
+                            
+                            resolve({
+                                original: file.name,
+                                processed: processedFile,
+                                url: URL.createObjectURL(blob)
+                            });
+                        }, mimeType, quality);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                
+                img.onerror = () => reject(new Error('이미지 로드 실패'));
+                img.src = URL.createObjectURL(file);
             });
         }
 
