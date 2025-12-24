@@ -1142,7 +1142,8 @@
                     const g = data[idx + 1];
                     const b = data[idx + 2];
                     const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-                    const isWhite = brightness > 245;
+                    // 흰색 판단을 더 엄격하게 (240 이상) - 상품의 밝은 부분 보호
+                    const isWhite = brightness > 240;
                     if (!isWhite && y >= topIgnore) {
                         if (y < top) top = y;
                         if (y > bottom) bottom = y;
@@ -1156,28 +1157,39 @@
                 return;
             }
 
-            const cropW = right - left + 1;
-            const cropH = bottom - top + 1;
+            // 패딩 추가 (잘림 방지)
+            const padding = Math.max(20, Math.min(width, height) * 0.03); // 최소 20px 또는 3%
+            const cropW = right - left + 1 + padding * 2;
+            const cropH = bottom - top + 1 + padding * 2;
+            
+            // 패딩을 고려한 크롭 좌표 (경계 체크)
+            let cropLeft = Math.max(0, left - padding);
+            let cropTop = Math.max(0, top - padding);
+            let cropRight = Math.min(width - 1, right + padding);
+            let cropBottom = Math.min(height - 1, bottom + padding);
+            
+            const finalCropW = cropRight - cropLeft + 1;
+            const finalCropH = cropBottom - cropTop + 1;
 
             const tmp = document.createElement('canvas');
-            tmp.width = cropW;
-            tmp.height = cropH;
+            tmp.width = finalCropW;
+            tmp.height = finalCropH;
             const tctx = tmp.getContext('2d');
             tctx.imageSmoothingEnabled = true;
             tctx.imageSmoothingQuality = 'high';
-            tctx.drawImage(canvas, left, top, cropW, cropH, 0, 0, cropW, cropH);
+            tctx.drawImage(canvas, cropLeft, cropTop, finalCropW, finalCropH, 0, 0, finalCropW, finalCropH);
 
             ctx.fillStyle = '#FFFFFF';
             ctx.fillRect(0, 0, width, height);
             // 긴 변이 targetSize를 넘을 때만 축소, 작으면 원본 크기 유지
-            const longest = Math.max(cropW, cropH);
+            const longest = Math.max(finalCropW, finalCropH);
             const targetSize = Math.min(width, height);
             let scale = 1;
             if (longest > targetSize) {
                 scale = targetSize / longest;
             }
-            const newW = cropW * scale;
-            const newH = cropH * scale;
+            const newW = finalCropW * scale;
+            const newH = finalCropH * scale;
             const dx = (width - newW) / 2;
             const dy = (height - newH) / 2;
             ctx.drawImage(tmp, dx, dy, newW, newH);
