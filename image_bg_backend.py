@@ -1,129 +1,84 @@
-import logging
-from io import BytesIO
-
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, send_file
 from flask_cors import CORS
 from PIL import Image
-
-from background_removal import remove_background
-
+from io import BytesIO
+from rembg import remove, new_session
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # CORS 허용
 
-logging.basicConfig(level=logging.INFO)
+# 전역에서 1회만 모델 세션 로딩 (성능 최적화)
+u2net_session = new_session('u2net')
 
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """서버 상태 확인"""
+    return {'status': 'ok'}, 200
 
-@app.route("/api/health", methods=["GET"])
-def health():
-    return jsonify({"status": "ok"}), 200
-
-
-@app.route("/api/remove_bg", methods=["POST"])
-def api_remove_bg():
-    """
-    프론트엔드에서 전송한 이미지를 rembg/u2net으로 배경제거 후 PNG로 반환.
-
-    요청:
-      - form-data: file=<이미지 파일>
-      - 선택: width, height (정수, 없으면 원본 크기)
-
-    응답:
-      - image/png 바이너리 (투명 배경)
-    """
-    if "file" not in request.files:
-        return jsonify({"error": "file 필드가 필요합니다."}), 400
-
-    file = request.files["file"]
-    if file.filename == "":
-        return jsonify({"error": "빈 파일명입니다."}), 400
-
+@app.route('/api/remove_bg', methods=['POST'])
+def remove_bg():
+    """배경 제거 API"""
     try:
-        img = Image.open(file.stream).convert("RGB")
-
-        # 원하는 출력 크기 (없으면 원본)
-        try:
-            width = int(request.form.get("width", 0))
-            height = int(request.form.get("height", 0))
-        except ValueError:
-            width = height = 0
-
-        if width > 0 and height > 0:
-            bg_size = (width, height)
-        else:
-            bg_size = img.size
-
-        logging.info("배경제거 요청: %s, size=%s -> bg_size=%s", file.filename, img.size, bg_size)
-
-        result = remove_background(img, bg_size)
-
-        buf = BytesIO()
-        # 투명 배경을 위해 PNG 사용
-        result.save(buf, format="PNG")
-        buf.seek(0)
-
-        return send_file(
-            buf,
-            mimetype="image/png",
-            as_attachment=False,
+        if 'file' not in request.files:
+            return {'error': 'No file provided'}, 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return {'error': 'No file selected'}, 400
+        
+        # width, height 파라미터 가져오기
+        width = int(request.form.get('width', 600))
+        height = int(request.form.get('height', 600))
+        
+        # 이미지 로드
+        image = Image.open(file.stream)
+        
+        # 배경 제거 (투명 배경 PNG 반환)
+        # 이미지를 바이트로 변환
+        img_bytes = BytesIO()
+        image.convert("RGB").save(img_bytes, format="PNG")
+        img_bytes.seek(0)
+        
+        # rembg로 배경 제거 (투명 배경) - 전역 세션 재사용
+        result_bytes = remove(
+            img_bytes.getvalue(),
+            session=u2net_session,
+            alpha_matting=False
         )
-    except Exception as e:
-        logging.exception("배경제거 처리 중 오류")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/remove_bg_hq_jpg", methods=["POST"])
-def api_remove_bg_hq_jpg():
-    """
-    데스크탑 품질에 가깝게: 백엔드에서 배경제거 + 리사이즈/패딩까지 처리 후
-    고품질 JPG(quality=95, subsampling=0)를 바로 반환.
-    프론트는 재압축 없이 그대로 저장만 하면 됨.
-    """
-    if "file" not in request.files:
-        return jsonify({"error": "file 필드가 필요합니다."}), 400
-
-    file = request.files["file"]
-    if file.filename == "":
-        return jsonify({"error": "빈 파일명입니다."}), 400
-
-    try:
-        img = Image.open(file.stream).convert("RGB")
-
-        try:
-            width = int(request.form.get("width", 0))
-            height = int(request.form.get("height", 0))
-        except ValueError:
-            width = height = 0
-
-        if width > 0 and height > 0:
-            bg_size = (width, height)
-        else:
-            bg_size = img.size
-
-        logging.info("HQ JPG 배경제거 요청: %s, size=%s -> bg_size=%s", file.filename, img.size, bg_size)
-        result = remove_background(img, bg_size)
-
-        buf = BytesIO()
-        # 데스크탑 품질에 최대한 근접한 고품질 JPG로 인코딩
-        result.save(buf, format="JPEG", quality=95, subsampling=0, optimize=True)
-        buf.seek(0)
-
+        
+        # 결과 이미지 로드
+        result_image = Image.open(BytesIO(result_bytes)).convert("RGBA")
+        
+        # 리사이징 및 중앙 정렬
+        result_image.thumbnail((width, height), Image.Resampling.LANCZOS)
+        new_img = Image.new("RGBA", (width, height), (255, 255, 255, 0))
+        paste_x = (width - result_image.width) // 2
+        paste_y = (height - result_image.height) // 2
+        new_img.paste(result_image, (paste_x, paste_y), result_image)
+        
+        # PNG로 변환 (투명도 포함)
+        output = BytesIO()
+        new_img.save(output, format='PNG')
+        output.seek(0)
+        
         return send_file(
-            buf,
-            mimetype="image/jpeg",
-            as_attachment=False,
+            output,
+            mimetype='image/png',
+            as_attachment=False
         )
+        
     except Exception as e:
-        logging.exception("HQ JPG 배경제거 처리 중 오류")
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        error_msg = f"배경 제거 실패: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        return {'error': error_msg}, 500
 
-
-if __name__ == "__main__":
-    # 로컬 테스트용 엔트리포인트
-    # python github_release/image_bg_backend.py
-    app.run(host="0.0.0.0", port=5001, debug=False)
-
-
-
-
+if __name__ == '__main__':
+    print("=" * 50)
+    print("배경 제거 백엔드 서버 시작")
+    print("=" * 50)
+    print("서버 주소: http://localhost:5001")
+    print("API 엔드포인트: /api/remove_bg")
+    print("=" * 50)
+    app.run(host='0.0.0.0', port=5001, debug=True)
 
