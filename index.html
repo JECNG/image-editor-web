@@ -1190,25 +1190,44 @@
             let top = height, bottom = -1, left = width, right = -1;
             const topIgnore = Math.floor(height * 0.22); // 상단 텍스트 영역 무시
 
+            // 흰색 판단: RGB 모두 높고, 밝기도 높아야 함
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                     const idx = (y * width + x) * 4;
                     const r = data[idx];
                     const g = data[idx + 1];
                     const b = data[idx + 2];
+                    
+                    // 흰색 판단: 밝기 + RGB 모두 높아야 함 (더 정확한 감지)
                     const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-                    // 흰색 판단을 더 엄격하게 (240 이상) - 상품의 밝은 부분 보호
-                    const isWhite = brightness > 240;
-                    if (!isWhite && y >= topIgnore) {
-                        if (y < top) top = y;
-                        if (y > bottom) bottom = y;
-                        if (x < left) left = x;
-                        if (x > right) right = x;
+                    const isVeryBright = brightness > 245; // 밝기 임계값 상향
+                    const isWhiteRGB = r > 240 && g > 240 && b > 240; // RGB 모두 높아야 함
+                    const isWhite = isVeryBright && isWhiteRGB;
+                    
+                    // 상단 영역은 텍스트가 있을 수 있으므로 더 엄격하게
+                    if (y < topIgnore) {
+                        // 상단 영역: 더 엄격한 흰색 판단
+                        const topIsWhite = brightness > 250 && r > 245 && g > 245 && b > 245;
+                        if (!topIsWhite) {
+                            if (y < top) top = y;
+                            if (y > bottom) bottom = y;
+                            if (x < left) left = x;
+                            if (x > right) right = x;
+                        }
+                    } else {
+                        // 하단 영역: 일반 흰색 판단
+                        if (!isWhite) {
+                            if (y < top) top = y;
+                            if (y > bottom) bottom = y;
+                            if (x < left) left = x;
+                            if (x > right) right = x;
+                        }
                     }
                 }
             }
 
-            if (bottom <= top || right <= left) {
+            // 유효한 바운딩 박스가 없으면 원본 그대로 유지
+            if (bottom <= top || right <= left || top >= height || left >= width) {
                 return;
             }
 
