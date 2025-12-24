@@ -20,6 +20,14 @@ app = Flask(__name__)
 # CORS 설정 - 모든 origin 허용 (개발/프로덕션 모두)
 CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type", "Authorization"]}})
 
+# CORS 헤더를 명시적으로 추가 (after_request)
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response
+
 # 모델 세션을 lazy load로 변경 (메모리 절약 및 시작 시간 단축)
 u2net_session = None
 session_lock = threading.Lock()
@@ -116,19 +124,29 @@ def generate_trimap(alpha, fg_thresh=230, bg_thresh=15, kernel_size=8):
 
 @app.route('/api/health', methods=['GET', 'OPTIONS'])
 def health_check():
-    """서버 상태 확인"""
+    """서버 상태 확인 (가벼운 엔드포인트, 모델 로드 안 함)"""
+    if request.method == 'OPTIONS':
+        response = jsonify({})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        return response, 200
+    
     try:
-        if request.method == 'OPTIONS':
-            return '', 200
         return jsonify({'status': 'ok', 'message': 'Backend is running'}), 200
     except Exception as e:
+        print(f"Health check error: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/remove_bg', methods=['POST', 'OPTIONS'])
 def remove_bg():
     """배경 제거 API"""
     if request.method == 'OPTIONS':
-        return '', 200
+        response = jsonify({})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        return response, 200
     try:
         if 'file' not in request.files:
             return {'error': 'No file provided'}, 400
@@ -144,6 +162,15 @@ def remove_bg():
         # 이미지 로드
         image = Image.open(file.stream)
         original_size = image.size
+        
+        # 메모리 절약: 큰 이미지는 미리 리사이즈 (최대 2000px)
+        max_dimension = 2000
+        if max(original_size) > max_dimension:
+            scale = max_dimension / max(original_size)
+            new_size = (int(original_size[0] * scale), int(original_size[1] * scale))
+            image = image.resize(new_size, Image.Resampling.LANCZOS)
+            original_size = new_size
+            print(f"이미지 리사이즈: {original_size} (메모리 절약)")
         
         # 배경 제거 (투명 배경 PNG 반환)
         # 이미지를 바이트로 변환
@@ -234,7 +261,9 @@ def remove_bg():
         error_trace = traceback.format_exc()
         print(f"ERROR: {error_msg}\n{error_trace}")
         # 에러 메시지는 간단하게, 상세는 서버 로그에만
-        return jsonify({'error': 'Background removal failed', 'message': str(e)}), 500
+        response = jsonify({'error': 'Background removal failed', 'message': str(e)})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response, 500
 
 if __name__ == '__main__':
     print("=" * 50)
