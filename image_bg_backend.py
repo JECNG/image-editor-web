@@ -98,7 +98,6 @@ def remove_bg():
     """배경 제거 API"""
     if request.method == 'OPTIONS':
         return '', 200
-    """배경 제거 API"""
     try:
         if 'file' not in request.files:
             return {'error': 'No file provided'}, 400
