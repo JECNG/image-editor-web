@@ -1125,6 +1125,64 @@
             ctx.drawImage(tempCanvas, x, y, imgWidth, imgHeight);
         }
 
+        // 화이트 배경 상품용 크롭 (텍스트/여백 제거, JPG 전용 모드)
+        function cropWhiteBackground(canvas, ctx) {
+            const width = canvas.width;
+            const height = canvas.height;
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+
+            let top = height, bottom = -1, left = width, right = -1;
+            const topIgnore = Math.floor(height * 0.22); // 상단 텍스트 영역 무시
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    const r = data[idx];
+                    const g = data[idx + 1];
+                    const b = data[idx + 2];
+                    const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+                    const isWhite = brightness > 245;
+                    if (!isWhite && y >= topIgnore) {
+                        if (y < top) top = y;
+                        if (y > bottom) bottom = y;
+                        if (x < left) left = x;
+                        if (x > right) right = x;
+                    }
+                }
+            }
+
+            if (bottom <= top || right <= left) {
+                return;
+            }
+
+            const cropW = right - left + 1;
+            const cropH = bottom - top + 1;
+
+            const tmp = document.createElement('canvas');
+            tmp.width = cropW;
+            tmp.height = cropH;
+            const tctx = tmp.getContext('2d');
+            tctx.imageSmoothingEnabled = true;
+            tctx.imageSmoothingQuality = 'high';
+            tctx.drawImage(canvas, left, top, cropW, cropH, 0, 0, cropW, cropH);
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+            // 긴 변이 targetSize를 넘을 때만 축소, 작으면 원본 크기 유지
+            const longest = Math.max(cropW, cropH);
+            const targetSize = Math.min(width, height);
+            let scale = 1;
+            if (longest > targetSize) {
+                scale = targetSize / longest;
+            }
+            const newW = cropW * scale;
+            const newH = cropH * scale;
+            const dx = (width - newW) / 2;
+            const dy = (height - newH) / 2;
+            ctx.drawImage(tmp, dx, dy, newW, newH);
+        }
+
         async function processImage(file, width, height, removeBg, format) {
             return new Promise((resolve, reject) => {
                 const img = new Image();
@@ -1145,8 +1203,16 @@
                         const x = (width - newWidth) / 2;
                         const y = (height - newHeight) / 2;
                         
-                        if (removeBg) {
-                            // 배경 제거 모드: 투명 배경
+                        const isJpg = (format === 'jpg' || format === 'jpeg');
+                        
+                        if (removeBg && isJpg) {
+                            // JPG + 배경제거: 화이트 배경 크롭 모드
+                            ctx.fillStyle = '#FFFFFF';
+                            ctx.fillRect(0, 0, width, height);
+                            ctx.drawImage(img, x, y, newWidth, newHeight);
+                            cropWhiteBackground(canvas, ctx);
+                        } else if (removeBg) {
+                            // PNG/WEBP + 배경제거: 투명 배경
                             ctx.clearRect(0, 0, width, height);
                             removeBackground(canvas, ctx, img, x, y, newWidth, newHeight);
                         } else {
@@ -1156,14 +1222,9 @@
                             ctx.drawImage(img, x, y, newWidth, newHeight);
                         }
                         
-                        // JPEG는 투명도를 지원하지 않으므로 PNG로 변환
+                        // 출력 포맷 설정 (JPG + 배경제거는 JPG로 저장)
                         let outputFormat = format;
-                        let mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
-                        
-                        if (removeBg && (format === 'jpg' || format === 'jpeg')) {
-                            outputFormat = 'png';
-                            mimeType = 'image/png';
-                        }
+                        let mimeType = (format === 'jpg' || format === 'jpeg') ? 'image/jpeg' : `image/${format}`;
                         
                         // JPG는 0.98, WEBP는 0.95 (1.0은 브라우저 구현에 따라 역효과 가능)
                         const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg') ? 0.98 :
