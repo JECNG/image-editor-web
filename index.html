@@ -44,6 +44,48 @@
             color: white;
             padding: 40px;
             text-align: center;
+            position: relative;
+        }
+        
+        .backend-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #888;
+            box-shadow: 0 0 8px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .status-indicator.online {
+            background: #4ade80;
+            box-shadow: 0 0 12px rgba(74, 222, 128, 0.6);
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.offline {
+            background: #f87171;
+            box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);
+        }
+        
+        .status-indicator.checking {
+            background: #fbbf24;
+            box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
 
         .header h1 {
@@ -1140,6 +1182,39 @@
                 return false;
             }
         }
+        
+        // 백엔드 상태 인디케이터 업데이트
+        function updateBackendStatus(isOnline) {
+            const indicator = document.getElementById('backendStatusIndicator');
+            const statusText = document.getElementById('backendStatusText');
+            
+            if (isOnline) {
+                indicator.className = 'status-indicator online';
+                statusText.textContent = '백엔드 연결됨';
+            } else {
+                indicator.className = 'status-indicator offline';
+                statusText.textContent = '백엔드 오프라인';
+            }
+        }
+        
+        // 백엔드 상태 주기적 확인
+        async function checkBackendStatus() {
+            const indicator = document.getElementById('backendStatusIndicator');
+            const statusText = document.getElementById('backendStatusText');
+            
+            indicator.className = 'status-indicator checking';
+            statusText.textContent = '백엔드 확인 중...';
+            
+            const isOnline = await checkBackendHealth();
+            updateBackendStatus(isOnline);
+        }
+        
+        // 페이지 로드 시 및 주기적으로 상태 확인
+        window.addEventListener('load', () => {
+            checkBackendStatus();
+            // 30초마다 상태 확인
+            setInterval(checkBackendStatus, 30000);
+        });
 
         async function removeBackgroundViaApi(file, width, height) {
             if (!REMOVE_BG_API_URL) {
