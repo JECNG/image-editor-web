@@ -17,28 +17,48 @@ except ImportError:
 import traceback
 
 app = Flask(__name__)
-# CORS 설정 - 모든 origin 허용 (개발/프로덕션 모두)
-CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type", "Authorization"]}})
+# CORS 설정 - 가장 단순한 형태로 모든 origin 허용
+CORS(app, origins="*", supports_credentials=False)
 
-# CORS 헤더를 명시적으로 추가 (after_request)
+# CORS 헤더를 명시적으로 추가 (after_request - 모든 응답에)
 @app.after_request
 def after_request(response):
     response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    response.headers.add('Access-Control-Max-Age', '3600')
     return response
+
+# 전역 에러 핸들러
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """모든 예외를 처리하고 CORS 헤더 포함"""
+    print(f"Global error handler: {str(e)}")
+    print(traceback.format_exc())
+    response = jsonify({'error': 'Internal server error', 'message': str(e)})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response, 500
 
 # 모델 세션을 lazy load로 변경 (메모리 절약 및 시작 시간 단축)
 u2net_session = None
 session_lock = threading.Lock()
 
 def get_session():
-    """모델 세션을 lazy load로 가져오기"""
+    """모델 세션을 lazy load로 가져오기 (에러 핸들링 포함)"""
     global u2net_session
     if u2net_session is None:
         with session_lock:
             if u2net_session is None:
-                u2net_session = new_session('u2net')
+                try:
+                    print("모델 세션 로딩 시작...")
+                    u2net_session = new_session('u2net')
+                    print("모델 세션 로딩 완료")
+                except Exception as e:
+                    print(f"모델 세션 로딩 실패: {str(e)}")
+                    print(traceback.format_exc())
+                    raise
     return u2net_session
 
 def refine_alpha_mask(alpha):
@@ -127,16 +147,16 @@ def health_check():
     """서버 상태 확인 (가벼운 엔드포인트, 모델 로드 안 함)"""
     if request.method == 'OPTIONS':
         response = jsonify({})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
         return response, 200
     
     try:
-        return jsonify({'status': 'ok', 'message': 'Backend is running'}), 200
+        # 모델 로드 시도 안 함, 단순히 서버가 살아있는지만 확인
+        response = jsonify({'status': 'ok', 'message': 'Backend is running'})
+        return response, 200
     except Exception as e:
         print(f"Health check error: {str(e)}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        response = jsonify({'status': 'error', 'message': str(e)})
+        return response, 500
 
 @app.route('/api/remove_bg', methods=['POST', 'OPTIONS'])
 def remove_bg():
