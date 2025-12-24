@@ -18,7 +18,7 @@ import traceback
 
 app = Flask(__name__)
 # CORS 설정 - 모든 origin 허용 (개발/프로덕션 모두)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type", "Authorization"]}})
 
 # 모델 세션을 lazy load로 변경 (메모리 절약 및 시작 시간 단축)
 u2net_session = None
@@ -34,16 +34,58 @@ def get_session():
     return u2net_session
 
 def refine_alpha_mask(alpha):
-    """알파 마스크 정제: 간단한 morphology만 사용 (메모리 절약)"""
+    """알파 마스크 정제: morphology + connected components (상단 텍스트 제거)"""
     try:
         alpha_uint8 = (alpha * 255).astype(np.uint8)
+        h, w = alpha_uint8.shape
         
-        # 간단한 morphology만 (메모리 절약)
+        # 1. Morphology로 노이즈 제거
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         alpha_cleaned = cv2.morphologyEx(alpha_uint8, cv2.MORPH_OPEN, kernel, iterations=1)
         alpha_cleaned = cv2.morphologyEx(alpha_cleaned, cv2.MORPH_CLOSE, kernel, iterations=1)
         
-        # Gaussian blur (가볍게)
+        # 2. Connected components로 상단 텍스트 제거 (메모리 효율적으로)
+        # 상단 22% 영역에서만 작은 컴포넌트 제거
+        top_region_height = int(h * 0.22)
+        if top_region_height > 0:
+            try:
+                # 이진 마스크 생성 (알파 > 128인 영역)
+                binary = (alpha_cleaned > 128).astype(np.uint8) * 255
+                
+                # Connected components 분석 (최소 면적만 계산)
+                num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
+                
+                if num_labels > 1:  # 배경(0) 외에 컴포넌트가 있으면
+                    # 전체 이미지에서 가장 큰 컴포넌트 찾기
+                    largest_area = 0
+                    largest_label = 1
+                    for label in range(1, num_labels):
+                        area = stats[label, cv2.CC_STAT_AREA]
+                        if area > largest_area:
+                            largest_area = area
+                            largest_label = label
+                    
+                    # 상단 영역의 작은 컴포넌트 제거
+                    mask = np.zeros_like(alpha_cleaned, dtype=np.uint8)
+                    for label in range(1, num_labels):
+                        if label == largest_label:
+                            # 가장 큰 컴포넌트는 항상 유지
+                            mask[labels == label] = 255
+                        else:
+                            # 상단 영역에 있는 작은 컴포넌트만 제거
+                            y_center = int(centroids[label, 1])
+                            area = stats[label, cv2.CC_STAT_AREA]
+                            if y_center < top_region_height and area < (w * h * 0.05):  # 상단 + 작은 면적
+                                continue  # 제거
+                            else:
+                                mask[labels == label] = 255
+                    
+                    # 마스크 적용
+                    alpha_cleaned = np.where(mask > 0, alpha_cleaned, 0)
+            except Exception as e:
+                print(f"Connected components 실패, morphology만 사용: {str(e)}")
+        
+        # 3. Gaussian blur (가볍게)
         alpha_cleaned = cv2.GaussianBlur(alpha_cleaned, (3, 3), 0.5)
         
         return alpha_cleaned.astype(np.float32) / 255.0
