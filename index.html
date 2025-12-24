@@ -1312,8 +1312,8 @@
                                     let outputFormat = format;
                                     let mimeType = (format === 'jpg' || format === 'jpeg') ? 'image/jpeg' : `image/${format}`;
                                     
-                                    // JPG는 0.98, WEBP는 0.95
-                                    const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg') ? 0.98 :
+                                    // JPG는 최대 품질(1.0)로 색상 보존, WEBP는 0.95
+                                    const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg') ? 1.0 :
                                                    (outputFormat === 'webp') ? 0.95 : undefined;
                                     
                                     canvas.toBlob((blob) => {
@@ -1405,8 +1405,8 @@
                     let mimeType = (format === 'jpg' || format === 'jpeg') ? 'image/jpeg' : `image/${format}`;
                     
                     // JPG + 배경제거는 흰 배경으로 플래튼했으므로 JPG로 저장 가능
-                    
-                    const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg') ? 0.98 :
+                    // JPG는 최대 품질(1.0)로 색상 보존
+                    const quality = (outputFormat === 'jpg' || outputFormat === 'jpeg') ? 1.0 :
                                    (outputFormat === 'webp') ? 0.95 : undefined;
                     
                     canvas.toBlob((blob) => {
