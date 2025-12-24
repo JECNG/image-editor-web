@@ -1277,164 +1277,96 @@
                     
                     // 배경제거 모드
                     if (removeBg) {
-                        // JPG + 배경제거: 흰 배경 상품 이미지는 클라이언트 사이드 처리 (더 빠르고 정확)
-                        if (isJpg) {
-                            const img = new Image();
-                            img.onload = () => {
-                                try {
-                                    // 1단계: 원본 크기로 캔버스 생성 (전체 이미지 분석용)
-                                    const originalCanvas = document.createElement('canvas');
-                                    originalCanvas.width = img.width;
-                                    originalCanvas.height = img.height;
-                                    const originalCtx = originalCanvas.getContext('2d');
-                                    
-                                    // 고품질 보간 설정
-                                    originalCtx.imageSmoothingEnabled = true;
-                                    originalCtx.imageSmoothingQuality = 'high';
-                                    
-                                    // 원본 이미지를 원본 크기로 그리기
-                                    originalCtx.drawImage(img, 0, 0, img.width, img.height);
-                                    
-                                    // 2단계: 흰 배경 크롭 (원본 크기에서 분석)
-                                    cropWhiteBackground(originalCanvas, originalCtx);
-                                    
-                                    // 3단계: 최종 출력용 캔버스 (600x600)
-                                    const finalCanvas = document.createElement('canvas');
-                                    finalCanvas.width = width;
-                                    finalCanvas.height = height;
-                                    const finalCtx = finalCanvas.getContext('2d');
-                                    
-                                    finalCtx.imageSmoothingEnabled = true;
-                                    finalCtx.imageSmoothingQuality = 'high';
-                                    
-                                    // 흰 배경으로 채우기
-                                    finalCtx.fillStyle = '#FFFFFF';
-                                    finalCtx.fillRect(0, 0, width, height);
-                                    
-                                    // 크롭된 이미지를 600x600에 맞춰 리사이징 (thumbnail 방식)
-                                    let newW = originalCanvas.width;
-                                    let newH = originalCanvas.height;
-                                    if (newW > width || newH > height) {
-                                        const scale = Math.min(width / newW, height / newH);
-                                        newW = originalCanvas.width * scale;
-                                        newH = originalCanvas.height * scale;
-                                    }
-                                    const dx = (width - newW) / 2;
-                                    const dy = (height - newH) / 2;
-                                    finalCtx.drawImage(originalCanvas, dx, dy, newW, newH);
-                                    
-                                    // 출력 포맷 설정
-                                    const outputFormat = format;
-                                    const mimeType = 'image/jpeg';
-                                    const quality = 1.0; // 최대 품질
-                                    
-                                    finalCanvas.toBlob((blob) => {
-                                        if (!blob) {
-                                            reject(new Error('이미지 변환 실패'));
-                                            return;
-                                        }
-                                        
-                                        const processedFile = new File(
-                                            [blob],
-                                            file.name.replace(/\.[^/.]+$/, '') + '_edited.' + outputFormat,
-                                            { type: mimeType }
-                                        );
-                                        
-                                        resolve({
-                                            original: file.name,
-                                            processed: processedFile,
-                                            url: URL.createObjectURL(blob)
-                                        });
-                                    }, mimeType, quality);
-                                } catch (error) {
-                                    reject(error);
-                                }
-                            };
-                            img.onerror = () => reject(new Error('이미지 로드 실패'));
-                            img.src = URL.createObjectURL(file);
-                            return;
-                        }
-                        
-                        // PNG/WEBP + 배경제거: 백엔드 API 사용 (AI 기반)
+                        // 1순위: 백엔드 AI 배경제거 (JPG/PNG/WEBP 모두 공통)
                         const backendAvailable = await checkBackendHealth();
-                        if (!backendAvailable) {
-                            console.warn('백엔드 서버가 응답하지 않습니다. 로컬 폴백 모드를 사용합니다.');
-                            return processImageLocal(file, width, height, removeBg, format, resolve, reject);
-                        }
-                        
-                        try {
-                            const sourceBlob = await removeBackgroundViaApi(file, width, height);
-                            const sourceFile = new File(
-                                [sourceBlob],
-                                file.name.replace(/\.[^/.]+$/, '') + '_nobg.png',
-                                { type: 'image/png' }
-                            );
-                            
-                            const img = new Image();
-                            img.onload = () => {
-                                try {
-                                    const canvas = document.createElement('canvas');
-                                    canvas.width = width;
-                                    canvas.height = height;
-                                    const ctx = canvas.getContext('2d');
-                                    
-                                    // 고품질 보간 설정
-                                    ctx.imageSmoothingEnabled = true;
-                                    ctx.imageSmoothingQuality = 'high';
-                                    
-                                    // 데스크톱 버전과 동일: thumbnail 방식
-                                    let newWidth = img.width;
-                                    let newHeight = img.height;
-                                    if (newWidth > width || newHeight > height) {
-                                        const scale = Math.min(width / newWidth, height / newHeight);
-                                        newWidth = img.width * scale;
-                                        newHeight = img.height * scale;
-                                    }
-                                    const x = (width - newWidth) / 2;
-                                    const y = (height - newHeight) / 2;
-                                    
-                                    // PNG/WEBP는 투명 배경 유지
-                                    ctx.clearRect(0, 0, width, height);
-                                    ctx.drawImage(img, x, y, newWidth, newHeight);
-                                    
-                                    // 출력 포맷 설정
-                                    let outputFormat = format;
-                                    let mimeType = `image/${format}`;
-                                    
-                                    // WEBP는 0.95 품질
-                                    const quality = (outputFormat === 'webp') ? 0.95 : undefined;
-                                    
-                                    canvas.toBlob((blob) => {
-                                        if (!blob) {
-                                            reject(new Error('이미지 변환 실패'));
-                                            return;
+                        if (backendAvailable) {
+                            try {
+                                const sourceBlob = await removeBackgroundViaApi(file, width, height);
+                                const sourceFile = new File(
+                                    [sourceBlob],
+                                    file.name.replace(/\.[^/.]+$/, '') + '_nobg.png',
+                                    { type: 'image/png' }
+                                );
+                                
+                                const img = new Image();
+                                img.onload = () => {
+                                    try {
+                                        const canvas = document.createElement('canvas');
+                                        canvas.width = width;
+                                        canvas.height = height;
+                                        const ctx = canvas.getContext('2d');
+                                        
+                                        // 고품질 보간 설정
+                                        ctx.imageSmoothingEnabled = true;
+                                        ctx.imageSmoothingQuality = 'high';
+                                        
+                                        // 데스크톱 버전과 동일: thumbnail 방식
+                                        let newWidth = img.width;
+                                        let newHeight = img.height;
+                                        if (newWidth > width || newHeight > height) {
+                                            const scale = Math.min(width / newWidth, height / newHeight);
+                                            newWidth = img.width * scale;
+                                            newHeight = img.height * scale;
+                                        }
+                                        const x = (width - newWidth) / 2;
+                                        const y = (height - newHeight) / 2;
+                                        
+                                        // JPG는 흰 배경으로 플래튼, PNG/WEBP는 투명 배경 유지
+                                        if (isJpg) {
+                                            ctx.fillStyle = '#FFFFFF';
+                                            ctx.fillRect(0, 0, width, height);
+                                            ctx.drawImage(img, x, y, newWidth, newHeight);
+                                        } else {
+                                            ctx.clearRect(0, 0, width, height);
+                                            ctx.drawImage(img, x, y, newWidth, newHeight);
                                         }
                                         
-                                        const processedFile = new File(
-                                            [blob],
-                                            file.name.replace(/\.[^/.]+$/, '') + '_edited.' + outputFormat,
-                                            { type: mimeType }
-                                        );
+                                        // 출력 포맷 설정
+                                        let outputFormat = format;
+                                        let mimeType = (isJpg ? 'image/jpeg' : `image/${format}`);
                                         
-                                        resolve({
-                                            original: file.name,
-                                            processed: processedFile,
-                                            url: URL.createObjectURL(blob)
-                                        });
-                                    }, mimeType, quality);
-                                } catch (error) {
-                                    reject(error);
-                                }
-                            };
-                            img.onerror = () => reject(new Error('이미지 로드 실패'));
-                            img.src = URL.createObjectURL(sourceFile);
-                        } catch (err) {
-                            console.warn('백엔드 배경제거 실패:', err.message);
-                            // 폴백: 로컬 처리
-                            return processImageLocal(file, width, height, removeBg, format, resolve, reject);
+                                        // 품질 설정
+                                        const quality = isJpg
+                                            ? 1.0
+                                            : (outputFormat === 'webp' ? 0.95 : undefined);
+                                        
+                                        canvas.toBlob((blob) => {
+                                            if (!blob) {
+                                                reject(new Error('이미지 변환 실패'));
+                                                return;
+                                            }
+                                            
+                                            const processedFile = new File(
+                                                [blob],
+                                                file.name.replace(/\.[^/.]+$/, '') + '_edited.' + outputFormat,
+                                                { type: mimeType }
+                                            );
+                                            
+                                            resolve({
+                                                original: file.name,
+                                                processed: processedFile,
+                                                url: URL.createObjectURL(blob)
+                                            });
+                                        }, mimeType, quality);
+                                    } catch (error) {
+                                        reject(error);
+                                    }
+                                };
+                                img.onerror = () => reject(new Error('이미지 로드 실패'));
+                                img.src = URL.createObjectURL(sourceFile);
+                                return;
+                            } catch (err) {
+                                console.warn('백엔드 배경제거 실패:', err.message);
+                                // 백엔드 실패 시 로컬 폴백으로 진행
+                            }
+                        } else {
+                            console.warn('백엔드 서버가 응답하지 않습니다. 로컬 폴백 모드를 사용합니다.');
                         }
+                        
+                        // 2순위: 로컬 폴백 처리 (화이트 배경 크롭 등)
+                        return processImageLocal(file, width, height, removeBg, format, resolve, reject);
                     } else {
-                        // 일반 모드: 로컬 처리
+                        // 일반 모드: 로컬 리사이징
                         processImageLocal(file, width, height, removeBg, format, resolve, reject);
                     }
                 } catch (outer) {
