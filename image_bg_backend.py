@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from PIL import Image
 from io import BytesIO
@@ -6,19 +6,13 @@ from rembg import remove, new_session
 import threading
 import numpy as np
 import cv2
-from skimage.morphology import dilation, disk, closing, opening
-from skimage.measure import label, regionprops
+from skimage.morphology import dilation, disk
 from pymatting import estimate_alpha_cf
+import traceback
 
 app = Flask(__name__)
-# CORS 명시적 설정 (GitHub Pages 포함)
-CORS(app, resources={
-    r"/api/*": {
-        "origins": ["https://jecng.github.io", "http://localhost:*", "https://*.github.io"],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
-    }
-})
+# CORS 설정 - 모든 origin 허용 (개발/프로덕션 모두)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # 모델 세션을 lazy load로 변경 (메모리 절약 및 시작 시간 단축)
 u2net_session = None
@@ -89,9 +83,12 @@ def generate_trimap(alpha, fg_thresh=230, bg_thresh=15, kernel_size=8):
 @app.route('/api/health', methods=['GET', 'OPTIONS'])
 def health_check():
     """서버 상태 확인"""
-    if request.method == 'OPTIONS':
-        return '', 200
-    return {'status': 'ok'}, 200
+    try:
+        if request.method == 'OPTIONS':
+            return '', 200
+        return jsonify({'status': 'ok', 'message': 'Backend is running'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/remove_bg', methods=['POST', 'OPTIONS'])
 def remove_bg():
@@ -141,8 +138,9 @@ def remove_bg():
         try:
             alpha_matted = estimate_alpha_cf(np_img[..., :3] / 255.0, trimap / 255.0)
             alpha_final = (alpha_matted * 255).astype(np.uint8)
-        except:
+        except Exception as e:
             # pymatting 실패 시 정제된 알파 사용
+            print(f"Pymatting 실패, 정제된 알파 사용: {str(e)}")
             alpha_final = (alpha_refined * 255).astype(np.uint8)
         
         # 최종 알파 마스크로 이미지 생성
@@ -193,10 +191,11 @@ def remove_bg():
         )
         
     except Exception as e:
-        import traceback
-        error_msg = f"배경 제거 실패: {str(e)}\n{traceback.format_exc()}"
-        print(error_msg)
-        return {'error': error_msg}, 500
+        error_msg = f"배경 제거 실패: {str(e)}"
+        error_trace = traceback.format_exc()
+        print(f"ERROR: {error_msg}\n{error_trace}")
+        # 에러 메시지는 간단하게, 상세는 서버 로그에만
+        return jsonify({'error': 'Background removal failed', 'message': str(e)}), 500
 
 if __name__ == '__main__':
     print("=" * 50)
