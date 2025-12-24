@@ -3,12 +3,23 @@ from flask_cors import CORS
 from PIL import Image
 from io import BytesIO
 from rembg import remove, new_session
+import threading
 
 app = Flask(__name__)
 CORS(app)  # CORS 허용
 
-# 전역에서 1회만 모델 세션 로딩 (성능 최적화)
-u2net_session = new_session('u2net')
+# 모델 세션을 lazy load로 변경 (메모리 절약 및 시작 시간 단축)
+u2net_session = None
+session_lock = threading.Lock()
+
+def get_session():
+    """모델 세션을 lazy load로 가져오기"""
+    global u2net_session
+    if u2net_session is None:
+        with session_lock:
+            if u2net_session is None:
+                u2net_session = new_session('u2net')
+    return u2net_session
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -39,10 +50,11 @@ def remove_bg():
         image.convert("RGB").save(img_bytes, format="PNG")
         img_bytes.seek(0)
         
-        # rembg로 배경 제거 (투명 배경) - 전역 세션 재사용
+        # rembg로 배경 제거 (투명 배경) - lazy load 세션 사용
+        session = get_session()
         result_bytes = remove(
             img_bytes.getvalue(),
-            session=u2net_session,
+            session=session,
             alpha_matting=False
         )
         
