@@ -4,19 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>이미지 수정 & WEBP 변환 도구</title>
-    <!-- ffmpeg.wasm CDN -->
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js" onerror="console.error('FFmpeg 스크립트 로드 실패')"></script>
-    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js" onerror="console.error('FFmpeg util 스크립트 로드 실패')"></script>
+    <!-- ffmpeg.wasm CDN (비디오→WEBP 변환용, 배경제거와 무관) -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js" onerror="console.warn('FFmpeg 스크립트 로드 실패 (비디오 변환 기능만 영향)')"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js" onerror="console.warn('FFmpeg util 스크립트 로드 실패 (비디오 변환 기능만 영향)')"></script>
     <script>
-        // FFmpeg 로드 확인
+        // FFmpeg 로드 확인 (조용히 처리, 배경제거 기능과 무관)
         window.addEventListener('load', function() {
             if (typeof FFmpeg === 'undefined') {
-                console.error('FFmpeg가 로드되지 않았습니다. CDN 연결을 확인해주세요.');
-            } else {
-                console.log('FFmpeg 로드 완료');
+                console.warn('FFmpeg가 로드되지 않았습니다. 비디오 변환 기능만 영향받습니다.');
             }
         });
     </script>
+    <link rel="icon" href="data:,">
     <style>
         * {
             margin: 0;
