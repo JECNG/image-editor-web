@@ -7,7 +7,13 @@ import threading
 import numpy as np
 import cv2
 from skimage.morphology import dilation, disk
-from pymatting import estimate_alpha_cf
+# pymatting은 메모리 부족으로 인한 크래시 방지를 위해 선택적 import
+try:
+    from pymatting import estimate_alpha_cf
+    PYMATTING_AVAILABLE = True
+except ImportError:
+    PYMATTING_AVAILABLE = False
+    print("Warning: pymatting not available, using simplified alpha refinement")
 import traceback
 
 app = Flask(__name__)
@@ -28,56 +34,40 @@ def get_session():
     return u2net_session
 
 def refine_alpha_mask(alpha):
-    """알파 마스크 정제: morphology, connected components, 텍스트 제거"""
-    # 1. Morphology operations으로 노이즈 제거
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    alpha_uint8 = (alpha * 255).astype(np.uint8)
-    
-    # Opening: 작은 노이즈 제거
-    alpha_cleaned = cv2.morphologyEx(alpha_uint8, cv2.MORPH_OPEN, kernel, iterations=2)
-    # Closing: 작은 구멍 채우기
-    alpha_cleaned = cv2.morphologyEx(alpha_cleaned, cv2.MORPH_CLOSE, kernel, iterations=2)
-    
-    # 2. Gaussian blur로 엣지 부드럽게
-    alpha_cleaned = cv2.GaussianBlur(alpha_cleaned, (5, 5), 1.0)
-    
-    # 3. Connected components로 가장 큰 객체만 유지
-    _, labels = cv2.connectedComponents(alpha_cleaned > 128)
-    if labels.max() > 0:
-        # 각 컴포넌트의 크기 계산
-        unique, counts = np.unique(labels[labels > 0], return_counts=True)
-        if len(unique) > 0:
-            largest_component = unique[np.argmax(counts)]
-            alpha_cleaned = (labels == largest_component).astype(np.uint8) * 255
-    
-    # 4. 상단 22% 영역의 작은 컴포넌트 제거 (텍스트 제거)
-    h, w = alpha_cleaned.shape
-    top_ignore = int(h * 0.22)
-    top_region = alpha_cleaned[:top_ignore, :]
-    _, top_labels = cv2.connectedComponents(top_region > 128)
-    if top_labels.max() > 0:
-        unique, counts = np.unique(top_labels[top_labels > 0], return_counts=True)
-        # 작은 컴포넌트 제거 (전체의 5% 미만)
-        min_area = (h * w) * 0.05
-        for comp_id, count in zip(unique, counts):
-            if count < min_area:
-                top_region[top_labels == comp_id] = 0
-        alpha_cleaned[:top_ignore, :] = top_region
-    
-    return alpha_cleaned.astype(np.float32) / 255.0
+    """알파 마스크 정제: 간단한 morphology만 사용 (메모리 절약)"""
+    try:
+        alpha_uint8 = (alpha * 255).astype(np.uint8)
+        
+        # 간단한 morphology만 (메모리 절약)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        alpha_cleaned = cv2.morphologyEx(alpha_uint8, cv2.MORPH_OPEN, kernel, iterations=1)
+        alpha_cleaned = cv2.morphologyEx(alpha_cleaned, cv2.MORPH_CLOSE, kernel, iterations=1)
+        
+        # Gaussian blur (가볍게)
+        alpha_cleaned = cv2.GaussianBlur(alpha_cleaned, (3, 3), 0.5)
+        
+        return alpha_cleaned.astype(np.float32) / 255.0
+    except Exception as e:
+        print(f"refine_alpha_mask 실패, 원본 사용: {str(e)}")
+        return alpha
 
 def generate_trimap(alpha, fg_thresh=230, bg_thresh=15, kernel_size=8):
-    """Trimap 생성 (pymatting용)"""
-    fg = alpha > (fg_thresh / 255.0)
-    bg = alpha < (bg_thresh / 255.0)
+    """Trimap 생성 (pymatting용) - 현재 비활성화"""
+    # 메모리 절약을 위해 간단한 버전만
+    alpha_uint8 = alpha if isinstance(alpha, np.ndarray) and alpha.dtype == np.uint8 else (alpha * 255).astype(np.uint8)
+    fg = alpha_uint8 > fg_thresh
+    bg = alpha_uint8 < bg_thresh
     unknown = ~(fg | bg)
     
-    trimap = np.full(alpha.shape, 128, dtype=np.uint8)
+    trimap = np.full(alpha_uint8.shape, 128, dtype=np.uint8)
     trimap[fg] = 255
     trimap[bg] = 0
     
-    # Dilation으로 unknown 영역 확장
-    trimap = dilation(trimap, disk(kernel_size))
+    # Dilation은 메모리 절약을 위해 작은 커널만
+    try:
+        trimap = dilation(trimap, disk(min(kernel_size, 5)))
+    except:
+        pass
     return trimap
 
 @app.route('/api/health', methods=['GET', 'OPTIONS'])
@@ -130,18 +120,23 @@ def remove_bg():
         np_img = np.array(result_image)
         alpha = np_img[..., 3].astype(np.float32) / 255.0
         
-        # 알파 마스크 정제
-        alpha_refined = refine_alpha_mask(alpha)
-        
-        # Trimap 생성 및 pymatting으로 엣지 개선
-        trimap = generate_trimap((alpha_refined * 255).astype(np.uint8))
+        # 알파 마스크 정제 (간단한 버전만)
         try:
-            alpha_matted = estimate_alpha_cf(np_img[..., :3] / 255.0, trimap / 255.0)
-            alpha_final = (alpha_matted * 255).astype(np.uint8)
-        except Exception as e:
-            # pymatting 실패 시 정제된 알파 사용
-            print(f"Pymatting 실패, 정제된 알파 사용: {str(e)}")
+            alpha_refined = refine_alpha_mask(alpha)
             alpha_final = (alpha_refined * 255).astype(np.uint8)
+        except Exception as e:
+            # 정제 실패 시 원본 알파 사용
+            print(f"알파 정제 실패, 원본 사용: {str(e)}")
+            alpha_final = (alpha * 255).astype(np.uint8)
+        
+        # pymatting은 메모리 부족으로 인한 크래시 방지를 위해 비활성화
+        # 필요시 주석 해제 (메모리 여유 있을 때만)
+        # try:
+        #     trimap = generate_trimap(alpha_final)
+        #     alpha_matted = estimate_alpha_cf(np_img[..., :3] / 255.0, trimap / 255.0)
+        #     alpha_final = (alpha_matted * 255).astype(np.uint8)
+        # except Exception as e:
+        #     print(f"Pymatting 실패, 정제된 알파 사용: {str(e)}")
         
         # 최종 알파 마스크로 이미지 생성
         np_img[..., 3] = alpha_final
