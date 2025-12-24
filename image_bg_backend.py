@@ -57,10 +57,12 @@ def refine_alpha_mask(alpha):
                 
                 if num_labels > 1:  # 배경(0) 외에 컴포넌트가 있으면
                     # 전체 이미지에서 가장 큰 컴포넌트 찾기
+                    # stats 구조: [left, top, width, height, area]
+                    CC_STAT_AREA = 4
                     largest_area = 0
                     largest_label = 1
                     for label in range(1, num_labels):
-                        area = stats[label, cv2.CC_STAT_AREA]
+                        area = stats[label, CC_STAT_AREA]
                         if area > largest_area:
                             largest_area = area
                             largest_label = label
@@ -74,7 +76,7 @@ def refine_alpha_mask(alpha):
                         else:
                             # 상단 영역에 있는 작은 컴포넌트만 제거
                             y_center = int(centroids[label, 1])
-                            area = stats[label, cv2.CC_STAT_AREA]
+                            area = stats[label, CC_STAT_AREA]
                             if y_center < top_region_height and area < (w * h * 0.05):  # 상단 + 작은 면적
                                 continue  # 제거
                             else:
